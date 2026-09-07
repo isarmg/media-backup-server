@@ -1,0 +1,10 @@
+{
+  "appearance": "content-blocks",
+  "default": true,
+  "consumerOverride": true,
+  "source": "sarmg-foundation-server/packages/admin-ui/content-blocks.css",
+  "origin": "union-rust/web/vendor/sarmg-design (Apache-2.0, sarmg)",
+  "license": "Apache-2.0",
+  "distribution": "Reviewed source snapshot; published npm dependencies remain unchanged",
+  "sha256": "739e807c1629459036a5228584a11979897a3e94199fc6323dccf5bb5ec30d79"
+}

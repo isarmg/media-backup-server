@@ -1,0 +1,245 @@
+/* Default Union content-block appearance, derived from union-rust's Apache-2.0
+ * sarmg-design content-card/login/tokens. No fonts, scripts or authentication.
+ * Any other explicit appearance name opts out, without changing behavior. */
+html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] {
+  color-scheme: light;
+  --sarmg-bg-page: #f5f6f3;
+  --sarmg-bg-panel: #fafbf8;
+  --sarmg-text-primary: #202a33;
+  --sarmg-text-link: #245b75;
+  --sarmg-action-primary: #245b75;
+  --sarmg-text-danger: #a73d46;
+  --sarmg-focus: #245b75;
+  --sarmg-block-muted: #60707c;
+  --sarmg-block-border: #d9dfd5;
+  --sarmg-radius-sm: 14px;
+  --sarmg-radius-md: 20px;
+  --sarmg-radius-lg: 26px;
+  color: var(--sarmg-text-primary);
+  background: var(--sarmg-bg-page);
+  body { margin: 0; }
+  .sarmg-shell-layout--full { grid-template-columns: minmax(0, 1fr); }
+  .sarmg-instance-workspace { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 24px; align-items: start; }
+  .sarmg-instance-workspace--full { grid-template-columns: minmax(0, 1fr); }
+  .sarmg-instance-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 0 16px; }
+  .sarmg-header-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; flex-shrink: 0; }
+  .sarmg-header-actions button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; min-height: 44px; line-height: 1; }
+  .sarmg-admin-shell > .sarmg-page-header { flex-wrap: nowrap; gap: 8px; }
+  .sarmg-header-navigation-slot { flex: 1; min-width: 0; overflow-x: auto; }
+  .sarmg-header-brand-navigation { display: flex; align-items: center; gap: 16px; width: max-content; }
+  .sarmg-header-brand-navigation > .sarmg-product-identity { display: flex; align-items: center; height: 44px; margin: 0; white-space: nowrap; }
+  .sarmg-header-navigation { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; width: max-content; padding: 3px; }
+  .sarmg-page-header :is(.sarmg-header-navigation a, .sarmg-header-navigation button, .sarmg-header-actions button) {
+    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+    height: 44px; min-height: 44px; line-height: 1;
+    white-space: nowrap; padding: 0 8px; flex-shrink: 0; color: var(--sarmg-text-primary);
+  }
+  .sarmg-header-navigation a { text-decoration: none; border-radius: 0; }
+  .sarmg-header-actions svg { width: var(--sarmg-header-icon-size, 1em); height: var(--sarmg-header-icon-size, 1em); }
+  &:not([data-sarmg-selection="custom"]) .sarmg-header-navigation [aria-current="page"] { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; }
+  .sarmg-native-workspace { margin: 16px; }
+  .sarmg-native-workspace > .main { margin: 0; min-width: 0; padding: 16px; border-radius: 20px; background: var(--sarmg-bg-panel); }
+  .sarmg-instance-list a { padding: .5rem .75rem; overflow-wrap: anywhere; }
+  &:not([data-sarmg-selection="custom"]) :is(.sarmg-navigation a[aria-current="page"], .sarmg-button[aria-pressed="true"], .sarmg-instance-list [aria-current="page"]) { background: transparent; color: var(--sarmg-text-primary); box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
+  .sarmg-instance-sidebar { display: grid; align-content: start; gap: 12px; min-width: 0; position: sticky; top: 16px; max-height: calc(100dvh - 100px); overflow-y: auto; }
+  .sarmg-instance-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .sarmg-instance-list .sarmg-button { text-align: start; display: grid; gap: 4px; width: 100%; overflow-wrap: anywhere; color: var(--sarmg-text-primary); }
+  .sarmg-instance-list .sarmg-button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sarmg-instance-workspace .sarmg-button[aria-pressed] { color: var(--sarmg-text-primary); }
+  &:not([data-sarmg-selection="custom"]) .sarmg-instance-workspace .sarmg-button[aria-pressed="true"] { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
+  .sarmg-instance-detail { min-width: 0; display: grid; gap: 16px; }
+  .sarmg-instance-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
+  .sarmg-instance-detail dd { margin: 0; overflow-wrap: anywhere; }
+  @media (max-width: 48rem) {
+    .sarmg-instance-workspace { grid-template-columns: minmax(0, 1fr); }
+    .sarmg-instance-sidebar { position: static; max-height: 40dvh; padding: 4px; }
+  }
+
+  &[data-theme="dark"] {
+    color-scheme: dark;
+    --sarmg-bg-page: #151a1d;
+    --sarmg-bg-panel: #252c31;
+    --sarmg-text-primary: #edf2f4;
+    --sarmg-text-link: #5fa8c8;
+    --sarmg-action-primary: #5fa8c8;
+    --sarmg-text-danger: #ff8a92;
+    --sarmg-focus: #5fa8c8;
+    --sarmg-block-muted: #a4b0b7;
+    --sarmg-block-border: #354047;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:not([data-theme="light"]):not([data-theme="dark"]) {
+      color-scheme: dark;
+      --sarmg-bg-page: #151a1d;
+      --sarmg-bg-panel: #252c31;
+      --sarmg-text-primary: #edf2f4;
+      --sarmg-text-link: #5fa8c8;
+      --sarmg-action-primary: #5fa8c8;
+      --sarmg-text-danger: #ff8a92;
+      --sarmg-focus: #5fa8c8;
+      --sarmg-block-muted: #a4b0b7;
+      --sarmg-block-border: #354047;
+    }
+  }
+
+  /* General blocks grow with their content; only six-row cards are fixed ratio. */
+  .sarmg-content-panel, .sarmg-table-scroll, .sarmg-dialog, .sarmg-toast {
+    min-width: 0;
+    padding: 1rem;
+    border: 0;
+    border-radius: 20px;
+    background: var(--sarmg-bg-panel);
+    overflow-wrap: anywhere;
+  }
+  .sarmg-table-scroll { margin-block: 1rem; }
+  .sarmg-table :is(th, td) { border-color: var(--sarmg-block-border); font-weight: 400; }
+  .sarmg-page-header, .sarmg-navigation { border: 0; background: transparent; }
+  .sarmg-navigation a { text-decoration: none; }
+  .sarmg-navigation a[aria-current="page"] { background: var(--sarmg-bg-panel); color: var(--sarmg-text-link); font-weight: 400; }
+  .sarmg-shell-main { display: grid; align-content: start; gap: 16px; }
+  .sarmg-shell-main > * { min-width: 0; }
+  .sarmg-button { border: 0; background: transparent; color: var(--sarmg-text-link); font-weight: 400; }
+  .sarmg-button:hover { text-decoration: underline; }
+  .sarmg-input { border-color: var(--sarmg-block-border); background: transparent; }
+  .sarmg-status { border: 0; padding-inline: 0; }
+  .sarmg-error, .sarmg-empty, .sarmg-loading { border: 0; border-radius: 20px; background: var(--sarmg-bg-panel); margin-block: 1rem; }
+  .sarmg-content-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 16px; margin-block: 16px; }
+  .sarmg-table-scroll:has(.sarmg-content-table) { background: transparent; padding: 0; }
+  .sarmg-content-table { display: block; }
+  .sarmg-content-table > caption, .sarmg-content-table > thead {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+  }
+  .sarmg-content-table > tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+  .sarmg-content-table tr {
+    display: grid; grid-template-rows: repeat(6, auto); align-content: start;
+    min-width: 0; min-height: 190px; padding: .6rem 1rem;
+    border-radius: 20px; background: var(--sarmg-bg-panel);
+  }
+  .sarmg-content-table :is(th, td) { padding: .4rem 0; border: 0; min-width: 0; overflow-wrap: anywhere; }
+  .sarmg-content-table td[data-label]::before { content: attr(data-label); color: var(--sarmg-block-muted); margin-inline-end: 2ch; }
+  .sarmg-content-table details :is(dl, dd) { margin-inline: 0; }
+  .sarmg-content-card {
+    position: relative;
+    container-type: size;
+    aspect-ratio: 3 / 2;
+    min-width: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 5.5556% / 8.3333%;
+    background: var(--sarmg-bg-panel);
+    font-weight: 400;
+  }
+  .sarmg-content-card__inner {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    padding-inline: calc(5.5556% - 100cqh / 24);
+    font-size: clamp(1rem, calc(100cqh / 12), 1.5rem);
+    line-height: 1.2;
+  }
+  .sarmg-content-row { display: flex; align-items: center; gap: 2ch; min-width: 0; }
+  .sarmg-content-row > :first-child { color: var(--sarmg-block-muted); flex-shrink: 0; }
+  .sarmg-content-row > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sarmg-content-card :is(h2, h3, p, strong) { margin: 0; font-size: inherit; font-weight: 400; }
+
+  /* The existing semantic labels, inputs and submit handler remain untouched.
+   * Grid places their children in the original six rows, including the error row. */
+  .sarmg-auth-shell { padding: 24px; }
+  .sarmg-auth-card { width: min(380px, 100%); border: 0; border-radius: 20px; }
+  .sarmg-auth-card:has(> form) {
+    position: relative;
+    container-type: size;
+    aspect-ratio: 3 / 2;
+    padding: 0;
+    border-radius: 5.5556% / 8.3333%;
+  }
+  .sarmg-auth-card:has(> form) > .sarmg-product-identity,
+  .sarmg-auth-card > form > h1 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .sarmg-auth-card > form {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(6, minmax(0, 1fr));
+    padding-inline: calc(5.5556% - 100cqh / 24);
+    font-size: calc(100cqh / 12);
+    line-height: 1.2;
+  }
+  .sarmg-auth-card .sarmg-form-field { display: contents; }
+  .sarmg-auth-card .sarmg-form-field > span { display: flex; align-items: center; gap: 1ch; color: var(--sarmg-block-muted); }
+  .sarmg-auth-card .sarmg-form-field:has([name="username"]) > span { grid-row: 1; }
+  .sarmg-auth-card [name="username"] { grid-row: 2; }
+  .sarmg-auth-card .sarmg-form-field:has([name="password"]) > span { grid-row: 3; }
+  .sarmg-auth-card [name="password"] { grid-row: 4; }
+  .sarmg-auth-card .sarmg-input {
+    align-self: center;
+    min-height: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-bottom: 1px solid transparent;
+    border-radius: 0;
+  }
+  .sarmg-auth-card .sarmg-input:focus { border-bottom-color: var(--sarmg-focus); outline: 0; }
+  .sarmg-auth-card .sarmg-error {
+    grid-row: 5;
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    font-size: .65em;
+    overflow: auto;
+  }
+  .sarmg-auth-card .sarmg-error .sarmg-request-id { font-size: inherit; }
+  .sarmg-auth-card > form > button {
+    grid-row: 6;
+    justify-self: start;
+    align-self: center;
+    display: flex;
+    align-items: center;
+    gap: 1ch;
+    padding: 0;
+    min-height: 0;
+    height: 100%;
+    border-radius: 0;
+    font-size: inherit;
+  }
+  .sarmg-auth-card .sarmg-form-field > span::before,
+  .sarmg-auth-card > form > button::before {
+    content: "";
+    width: 1em;
+    height: 1em;
+    flex: 0 0 1em;
+    background: currentColor;
+    mask: var(--sarmg-block-icon) center / contain no-repeat;
+  }
+  .sarmg-auth-card .sarmg-form-field:has([name="username"]) > span {
+    --sarmg-block-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4'%3E%3Crect x='1' y='1' width='22' height='22' rx='5'/%3E%3Ccircle cx='12' cy='9' r='3'/%3E%3Cpath d='M6 19v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2'/%3E%3C/svg%3E");
+  }
+  .sarmg-auth-card .sarmg-form-field:has([name="password"]) > span {
+    --sarmg-block-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4'%3E%3Crect x='1' y='1' width='22' height='22' rx='5'/%3E%3Crect x='6' y='11' width='12' height='8' rx='1'/%3E%3Cpath d='M8 11V8a4 4 0 0 1 8 0v3'/%3E%3C/svg%3E");
+  }
+  .sarmg-auth-card > form > button {
+    --sarmg-block-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.4'%3E%3Crect x='1' y='1' width='22' height='22' rx='5'/%3E%3Cpath d='M13 6h5v12h-5M4 12h10m-4-4 4 4-4 4'/%3E%3C/svg%3E");
+  }
+
+  /* Native-ESM pages use the same palette and block surfaces. */
+  .login-card .card-row-label { color: var(--sarmg-block-muted); }
+  body > .main { margin: 16px; padding: 16px; border-radius: 20px; background: var(--sarmg-bg-panel); }
+  .action-dialog { border: 0; border-radius: 26px; background: var(--sarmg-bg-panel); }
+
+  @media (forced-colors: active) {
+    .sarmg-content-card, .sarmg-content-panel, .sarmg-auth-card, .sarmg-table-scroll, .sarmg-dialog { border: 1px solid CanvasText; }
+    .sarmg-auth-card .sarmg-input { border-bottom-color: ButtonText; }
+    :is(button, input, select, a):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  }
+}

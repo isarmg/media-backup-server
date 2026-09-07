@@ -1,0 +1,42 @@
+name: Independence gate
+on: [push, pull_request]
+jobs:
+  independence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: ./scripts/check-workflow-supply-chain.sh
+      - run: |
+          set -euo pipefail
+          # Current Foundation SQLite metadata is not retired runtime coupling.
+          if git grep -n -I -P 'UNION_|X-Union-|PluginManifest|ProcessContext|sarmg-platform|sarmg_platform(?!_metadata\b)' -- . ':(exclude).github/workflows/independence.yml'; then
+            exit 1
+          else
+            grep_status=$?
+            if ((grep_status != 1)); then
+              exit "$grep_status"
+            fi
+          fi
+
+          tracked_files="$(mktemp)"
+          trap 'rm -f "$tracked_files"' EXIT
+          git ls-files -z > "$tracked_files"
+          docker_path_found=false
+          while IFS= read -r -d '' tracked_path; do
+            tracked_name="${tracked_path##*/}"
+            tracked_name="${tracked_name,,}"
+            case "$tracked_name" in
+              dockerfile* | docker-compose*.yml | docker-compose*.yaml)
+                printf '%s\n' "$tracked_path"
+                docker_path_found=true
+                ;;
+            esac
+          done < "$tracked_files"
+          if [[ "$docker_path_found" == true ]]; then
+            exit 1
+          fi

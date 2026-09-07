@@ -1,0 +1,14 @@
+format = 1
+product_id = "media-backup"
+
+[foundation]
+platform_generation = 1
+version = "0.7.0"
+git_rev = "77e7ad7af8e1bf62432bd6bdd8fa9aff54cb39d1"
+
+[[components]]
+id = "server"
+profile = "server-control-plane"
+http_adapter = "axum"
+web_profile = "web-react-admin"
+capabilities = ["platform-sqlite", "admin-persistent", "server-runtime", "server-health"]

@@ -1,0 +1,58 @@
+# Media Backup 照片与视频备份
+
+本仓库为 Media Backup Server `0.3.0` 开发版，仅包含 Rust 服务端、协议和管理 Web。
+Android/iOS 客户端、共享队列核心和 FFI 位于独立的 [Client 仓库](https://github.com/isarmg/media-backup-client)。移动端通过 HTTPS 上传设备原始媒体和设备生成的缩略图；服务端使用
+SQLite 保存账户、图库组织和同步状态，并以 `plain-v1` 保存与设备原文件一致的未加密字节。
+
+本项目只实现当前版本。服务端只创建并接受 Media Backup `0.3.0` 当前 Schema，移动端只接受
+`media-backup-mobile-v0.2-r2` 合约；不属于当前身份的数据库、凭据和队列一律拒绝，产品仓库也不提供
+迁移、备份和恢复命令。这些离线任务统一由独立的 `sarmg-upgrade` 项目负责。
+
+## 组成
+
+```text
+crates/server       Rust/Axum 服务端、管理页和运维命令
+crates/protocol     服务端与移动端共享的数据协议
+web/                React 19 + TypeScript strict + Vite 7 管理客户端
+config/                     可提交配置样例；生产 Secret 位于源码树外
+deploy/                     systemd 源单元；发行时映射到 systemd/
+scripts/                    构建、发行、部署和契约门禁
+```
+
+## 快速验证
+
+```bash
+./scripts/check-workflow-supply-chain.sh
+npm ci --prefix web
+npm run build --prefix web
+cargo fmt --all -- --check
+cargo check --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+```
+
+Web 使用 Node `26.7.0`；`build` 会先执行 `check:foundation`，核对 `.node-version`、engine、精确
+React/Vite/TypeScript 版本、Foundation 依赖、lockfile、CSS 摘要和 `data-sarmg-scope`。Server 使用
+`rust-toolchain.toml` 固定 Rust `1.98.0`，Rust 编译前必须先生成 `web/dist`。
+
+服务端开发构建可以在显式回环开发配置下运行；正式环境必须使用不可变发行归档，并由 Caddy 或
+Nginx 在可信代理边界终止 TLS。移动业务 API 只位于 `/v2`；浏览器管理员认证只位于
+`/api/v2/auth/login|session|logout`，管理业务只位于 `/api/v2/admin/*`。正式 Server 的编译目标、
+归档 ELF、运行主机和 systemd 条件都固定为 `x86_64-unknown-linux-gnu`/Linux x86_64，不提供 ARM Server
+fallback。完整步骤见运维文档。
+
+Server 管理身份采用 Foundation 当前 `username` 合同：登录只接受 `{username,password}`，成功 Session
+恰为 `{authenticated,user_id,username,role:"admin",csrf_token}`。这一变化只属于 Server 与内置
+React/Vite 管理 Web；移动端、`accounts.username`、设备 Token/API Key、移动 Schema 和 FFI 合同保持
+原状。管理 username 与备份账户 username 即使文字相同，也属于不同表、不同凭据和不同授权域。
+
+## 文档
+
+- [仓库边界](docs/repository-boundary.md)
+- [完整功能与取舍清单](docs/feature-inventory-and-tradeoffs.md)
+- [部署、诊断、安全与发布运维](docs/operations.md)
+
+## 许可证
+
+第一方代码、文档和资源采用 [Apache License 2.0](LICENSE)。项目只参考其他照片管理产品的公开行为
+和架构思想，不复制其代码、资源、数据库结构或生成物。

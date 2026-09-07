@@ -1,0 +1,5 @@
+{
+  "extends": "@sarmg/web-toolchain/tsconfig.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["src", "vite.config.ts"]
+}

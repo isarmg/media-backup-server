@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+const manifest = JSON.parse(await readFile(new URL("./provenance.json", import.meta.url), "utf8"));
+assert.equal(manifest.appearance, "content-blocks");
+assert.equal(manifest.default, true);
+assert.equal(manifest.consumerOverride, true);
+const css = await readFile(new URL("./content-blocks.css", import.meta.url));
+assert.equal(createHash("sha256").update(css).digest("hex"), manifest.sha256, "Shared appearance snapshot changed; synchronize it from Server Foundation");
+const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+assert.match(html, /<html\b[^>]*data-sarmg-appearance="content-blocks"/);
+console.log("Default Server Foundation content-block appearance verified (consumer-overridable)");
