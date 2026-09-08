@@ -1633,3 +1633,374 @@ async fn orphan_blob_reclamation_keeps_a_durable_row_until_unlink_succeeds() {
     assert!(!object_path.exists());
     close_test_state(state, pool).await;
 }
+
+#[tokio::test]
+async fn gallery_filters_snapshot_previews_and_streaming_preserve_account_boundaries() {
+    let workspace = TestWorkspace::new();
+    let (state, pool) = test_state(&workspace.database(), &workspace.data()).await;
+    let (account, device) = seed_account(&pool, "blobs/gallery", "gallery").await;
+    let (_, other_device) = seed_account(&pool, "blobs/gallery-other", "gallery-other").await;
+    use sha2::{Digest, Sha256};
+    for (id, token) in [
+        (device, "token-gallery"),
+        (other_device, "token-gallery-other"),
+    ] {
+        sqlx::query("UPDATE devices SET token_hash=? WHERE id=?")
+            .bind(Sha256::digest(token.as_bytes()).to_vec())
+            .bind(id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2000, 1000)
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
+    let bytes = png.into_inner();
+    let upload = seed_received_upload(&state, account, device, &bytes, "gallery-photo").await;
+    let video_upload =
+        seed_received_upload(&state, account, device, b"0123456789", "gallery-video").await;
+    let app = test_router(state).await;
+    let result = json_body(
+        send(
+            &app,
+            empty_action_request(
+                Method::POST,
+                format!("/v2/uploads/{upload}/complete"),
+                "token-gallery",
+            ),
+            StatusCode::OK,
+        )
+        .await,
+    )
+    .await;
+    let video = json_body(
+        send(
+            &app,
+            empty_action_request(
+                Method::POST,
+                format!("/v2/uploads/{video_upload}/complete"),
+                "token-gallery",
+            ),
+            StatusCode::OK,
+        )
+        .await,
+    )
+    .await;
+    let resource = result["resource_id"].as_str().unwrap();
+    let asset = result["asset_id"].as_str().unwrap();
+    let video_id = Uuid::parse_str(video["asset_id"].as_str().unwrap()).unwrap();
+    sqlx::query("UPDATE assets SET media_kind='video',source_created_at_ms=500 WHERE id=?")
+        .bind(video_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("UPDATE resources SET mime_type='video/mp4' WHERE id=?")
+        .bind(Uuid::parse_str(video["resource_id"].as_str().unwrap()).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    let page = get_json(
+        &app,
+        format!("/v2/timeline?media_kind=video&from_ms=400&to_ms=600&device_id={device}&limit=1"),
+        "token-gallery",
+    )
+    .await;
+    assert_eq!(page["items"].as_array().unwrap().len(), 1);
+    assert_eq!(page["items"][0]["asset_id"], video["asset_id"]);
+    assert_eq!(
+        get_json(
+            &app,
+            format!("/v2/timeline?device_id={other_device}"),
+            "token-gallery"
+        )
+        .await["items"],
+        json!([])
+    );
+    send(
+        &app,
+        authorized_request(
+            Method::GET,
+            "/v2/timeline?from_ms=5&to_ms=5",
+            "token-gallery",
+            Body::empty(),
+        ),
+        StatusCode::BAD_REQUEST,
+    )
+    .await;
+    let all = get_json(&app, "/v2/timeline", "token-gallery").await;
+    for summary in all["items"].as_array().unwrap() {
+        assert_eq!(
+            *summary,
+            get_json(
+                &app,
+                format!("/v2/assets/{}", summary["asset_id"].as_str().unwrap()),
+                "token-gallery"
+            )
+            .await
+        );
+    }
+    let head = get_json(&app, "/v2/sync/head", "token-gallery").await;
+    assert_eq!(head["snapshot_protocol"], "watermark-before-uuid-walk-v1");
+    let first = get_json(&app, "/v2/library/snapshot?limit=1", "token-gallery").await;
+    assert_eq!(first["items"].as_array().unwrap().len(), 1);
+    // A concurrent UUID behind the walk cursor is omitted by later snapshot pages,
+    // but its event after the captured watermark makes it recoverable.
+    let concurrent = Uuid::nil();
+    let mut tx = pool.begin().await.unwrap();
+    sqlx::query("INSERT INTO assets(id,account_id,device_id,source_asset_id,media_kind,source_created_at_ms,created_at,updated_at) VALUES (?,?,?,'concurrent','photo',0,datetime('now'),datetime('now'))")
+        .bind(concurrent).bind(account).bind(device).execute(&mut *tx).await.unwrap();
+    crate::audit::record_change(&mut tx, account, "asset", concurrent, "upsert")
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+    let second = get_json(
+        &app,
+        format!(
+            "/v2/library/snapshot?limit=1&cursor={}",
+            first["next_cursor"].as_str().unwrap()
+        ),
+        "token-gallery",
+    )
+    .await;
+    assert_ne!(
+        first["items"][0]["asset_id"],
+        second["items"][0]["asset_id"]
+    );
+    assert!(second["next_cursor"].is_null());
+    send(
+        &app,
+        json_request(
+            Method::PATCH,
+            format!("/v2/assets/{asset}"),
+            json!({"favorite":true}),
+            Some("token-gallery"),
+            None,
+        ),
+        StatusCode::OK,
+    )
+    .await;
+    let delta = get_json(
+        &app,
+        format!("/v2/sync?after={}", head["sequence"]),
+        "token-gallery",
+    )
+    .await;
+    assert!(delta["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["entity_id"] == asset));
+    assert!(delta["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["entity_id"] == concurrent.to_string()));
+    assert_eq!(
+        get_json(&app, format!("/v2/assets/{concurrent}"), "token-gallery").await
+            ["source_asset_id"],
+        "concurrent"
+    );
+    let tag = json_body(
+        send(
+            &app,
+            json_request(
+                Method::POST,
+                "/v2/tags",
+                json!({"name":"gallery-tag"}),
+                Some("token-gallery"),
+                None,
+            ),
+            StatusCode::CREATED,
+        )
+        .await,
+    )
+    .await;
+    let tag_path = format!("/v2/tags/{}/assets", tag["tag_id"].as_str().unwrap());
+    send(
+        &app,
+        json_request(
+            Method::PUT,
+            &tag_path,
+            json!({"asset_ids":[asset,video_id]}),
+            Some("token-gallery"),
+            None,
+        ),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    let before_tag = get_json(&app, "/v2/sync/head", "token-gallery").await;
+    send(
+        &app,
+        json_request(
+            Method::PUT,
+            &tag_path,
+            json!({"asset_ids":[asset]}),
+            Some("token-gallery"),
+            None,
+        ),
+        StatusCode::NO_CONTENT,
+    )
+    .await;
+    let tag_events = get_json(
+        &app,
+        format!("/v2/sync?after={}", before_tag["sequence"]),
+        "token-gallery",
+    )
+    .await;
+    assert!(tag_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["entity_id"] == video_id.to_string() && e["entity_kind"] == "asset"));
+    assert_eq!(
+        get_json(&app, format!("/v2/assets/{video_id}"), "token-gallery").await["tag_names"],
+        json!([])
+    );
+    assert_eq!(
+        get_json(&app, "/v2/devices", "token-gallery")
+            .await
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let path = format!("/v2/resources/{resource}/content");
+    let full = send(
+        &app,
+        authorized_request(Method::GET, &path, "token-gallery", Body::empty()),
+        StatusCode::OK,
+    )
+    .await;
+    let etag = full.headers()[header::ETAG].clone();
+    assert_eq!(
+        to_bytes(full.into_body(), bytes.len() + 1)
+            .await
+            .unwrap()
+            .as_ref(),
+        bytes
+    );
+    let mut request = authorized_request(Method::HEAD, &path, "token-gallery", Body::empty());
+    request
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, etag.clone());
+    send(&app, request, StatusCode::NOT_MODIFIED).await;
+    let head_response = send(
+        &app,
+        authorized_request(Method::HEAD, &path, "token-gallery", Body::empty()),
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(
+        head_response.headers()[header::CONTENT_LENGTH]
+            .to_str()
+            .unwrap(),
+        bytes.len().to_string()
+    );
+    assert!(to_bytes(head_response.into_body(), 1)
+        .await
+        .unwrap()
+        .is_empty());
+    for (range, start, end) in [
+        ("bytes=2-5", 2, 6),
+        ("bytes=-4", bytes.len() - 4, bytes.len()),
+        ("bytes=5-", 5, bytes.len()),
+    ] {
+        let mut request = authorized_request(Method::GET, &path, "token-gallery", Body::empty());
+        request
+            .headers_mut()
+            .insert(header::RANGE, range.parse().unwrap());
+        let response = send(&app, request, StatusCode::PARTIAL_CONTENT).await;
+        assert_eq!(response.headers()[header::ACCEPT_RANGES], "bytes");
+        assert_eq!(
+            to_bytes(response.into_body(), bytes.len())
+                .await
+                .unwrap()
+                .as_ref(),
+            &bytes[start..end]
+        );
+    }
+    let mut invalid = authorized_request(Method::GET, &path, "token-gallery", Body::empty());
+    invalid
+        .headers_mut()
+        .insert(header::RANGE, "bytes=9999999-".parse().unwrap());
+    let response = send(&app, invalid, StatusCode::RANGE_NOT_SATISFIABLE).await;
+    assert_eq!(
+        response.headers()[header::CONTENT_RANGE].to_str().unwrap(),
+        format!("bytes */{}", bytes.len())
+    );
+    let mut stale = authorized_request(Method::GET, &path, "token-gallery", Body::empty());
+    stale
+        .headers_mut()
+        .insert(header::RANGE, "bytes=2-5".parse().unwrap());
+    stale
+        .headers_mut()
+        .insert(header::IF_RANGE, "\"stale\"".parse().unwrap());
+    send(&app, stale, StatusCode::OK).await;
+    send(
+        &app,
+        authorized_request(Method::GET, &path, "token-gallery-other", Body::empty()),
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+    let preview_path = format!("/v2/resources/{resource}/preview");
+    send(
+        &app,
+        authorized_request(
+            Method::GET,
+            &preview_path,
+            "token-gallery-other",
+            Body::empty(),
+        ),
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+    let response = send(
+        &app,
+        authorized_request(Method::GET, &preview_path, "token-gallery", Body::empty()),
+        StatusCode::OK,
+    )
+    .await;
+    let derived_etag = response.headers()[header::ETAG].clone();
+    let preview = image::load_from_memory(
+        &to_bytes(response.into_body(), 8 * 1024 * 1024)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!((preview.width(), preview.height()), (1600, 800));
+    let mut conditional =
+        authorized_request(Method::GET, &preview_path, "token-gallery", Body::empty());
+    conditional
+        .headers_mut()
+        .insert(header::IF_NONE_MATCH, derived_etag);
+    send(&app, conditional, StatusCode::NOT_MODIFIED).await;
+    send(
+        &app,
+        authorized_request(
+            Method::GET,
+            format!(
+                "/v2/resources/{}/preview",
+                video["resource_id"].as_str().unwrap()
+            ),
+            "token-gallery",
+            Body::empty(),
+        ),
+        StatusCode::UNSUPPORTED_MEDIA_TYPE,
+    )
+    .await;
+    let original = send(
+        &app,
+        authorized_request(Method::GET, &path, "token-gallery", Body::empty()),
+        StatusCode::OK,
+    )
+    .await;
+    assert_eq!(original.headers()[header::ETAG], etag);
+    assert_eq!(
+        to_bytes(original.into_body(), bytes.len() + 1)
+            .await
+            .unwrap()
+            .as_ref(),
+        bytes
+    );
+}

@@ -56,3 +56,5 @@ React/Vite 管理 Web；移动端、`accounts.username`、设备 Token/API Key�
 
 第一方代码、文档和资源采用 [Apache License 2.0](LICENSE)。项目只参考其他照片管理产品的公开行为
 和架构思想，不复制其代码、资源、数据库结构或生成物。
+
+图库查询、增量快照、中等预览与视频分段读取的新增接口见 [图库 API 扩展](docs/gallery-api.md)。

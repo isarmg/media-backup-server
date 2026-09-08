@@ -10,7 +10,8 @@ use media_backup_protocol::{
     TagRecord, TimelinePage, UpdateAssetRequest, API_BASE_PATH,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::{Row, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqliteConnection, SqlitePool};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{audit, auth::AuthContext, error::AppError, routes::AppState};
@@ -26,6 +27,10 @@ pub struct TimelineQuery {
     archived: Option<bool>,
     album_id: Option<Uuid>,
     tag_id: Option<Uuid>,
+    media_kind: Option<MediaKind>,
+    from_ms: Option<i64>,
+    to_ms: Option<i64>,
+    device_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -64,6 +69,19 @@ pub async fn timeline(
     Extension(auth): Extension<AuthContext>,
     Query(query): Query<TimelineQuery>,
 ) -> Result<Json<TimelinePage>, AppError> {
+    if query
+        .from_ms
+        .zip(query.to_ms)
+        .is_some_and(|(start, end)| start >= end)
+    {
+        return Err(AppError::bad_request("from_ms must be before to_ms"));
+    }
+    let kind = query.media_kind.as_ref().map(|value| match value {
+        MediaKind::Photo => "photo",
+        MediaKind::Video => "video",
+        MediaKind::Other => "other",
+    });
+    let mut transaction = state.pool.begin().await?;
     let limit = query.limit.unwrap_or(100).clamp(1, 250) as i64;
     let cursor = query.cursor.as_deref().map(decode_cursor).transpose()?;
     let before_ms = cursor.as_ref().map(|value| value.created_at_ms);
@@ -83,8 +101,12 @@ pub async fn timeline(
           AND (?8 IS NULL OR EXISTS (
               SELECT 1 FROM tag_assets ta WHERE ta.tag_id = ?8 AND ta.asset_id = assets.id
           ))
+          AND (?9 IS NULL OR media_kind = ?9)
+          AND (?10 IS NULL OR source_created_at_ms >= ?10)
+          AND (?11 IS NULL OR source_created_at_ms < ?11)
+          AND (?12 IS NULL OR device_id = ?12)
         ORDER BY source_created_at_ms DESC, id DESC
-        LIMIT ?9
+        LIMIT ?13
         "#,
     )
     .bind(auth.account_id)
@@ -95,15 +117,21 @@ pub async fn timeline(
     .bind(query.archived)
     .bind(query.album_id)
     .bind(query.tag_id)
+    .bind(kind)
+    .bind(query.from_ms)
+    .bind(query.to_ms)
+    .bind(query.device_id)
     .bind(limit + 1)
-    .fetch_all(&state.pool)
+    .fetch_all(&mut *transaction)
     .await?;
     let has_more = rows.len() as i64 > limit;
     let selected = rows.into_iter().take(limit as usize).collect::<Vec<_>>();
-    let mut items = Vec::with_capacity(selected.len());
-    for row in &selected {
-        items.push(load_asset_summary(&state.pool, auth.account_id, row.get("id")).await?);
-    }
+    let ids = selected
+        .iter()
+        .map(|row| row.get("id"))
+        .collect::<Vec<Uuid>>();
+    let items = load_asset_summaries(&mut transaction, auth.account_id, &ids).await?;
+    transaction.commit().await?;
     let next_cursor = if has_more {
         selected.last().map(|row| {
             encode_cursor(&TimelineCursor {
@@ -613,6 +641,13 @@ pub async fn set_tag_assets(
     if !exists {
         return Err(AppError::not_found("tag not found"));
     }
+    let mut affected: std::collections::HashSet<Uuid> =
+        sqlx::query_scalar("SELECT asset_id FROM tag_assets WHERE tag_id = ?")
+            .bind(tag_id)
+            .fetch_all(&mut *transaction)
+            .await?
+            .into_iter()
+            .collect();
     sqlx::query("DELETE FROM tag_assets WHERE tag_id = ?")
         .bind(tag_id)
         .execute(&mut *transaction)
@@ -626,6 +661,7 @@ pub async fn set_tag_assets(
         .fetch_one(&mut *transaction)
         .await?;
         if exists {
+            affected.insert(*asset_id);
             sqlx::query(
                 "INSERT INTO tag_assets(tag_id, asset_id, added_at) \
                  VALUES(?, ?, datetime('now')) \
@@ -636,6 +672,16 @@ pub async fn set_tag_assets(
             .execute(&mut *transaction)
             .await?;
         }
+    }
+    for asset_id in affected {
+        audit::record_change(
+            &mut transaction,
+            auth.account_id,
+            "asset",
+            asset_id,
+            "upsert",
+        )
+        .await?;
     }
     audit::record_change(&mut transaction, auth.account_id, "tag", tag_id, "upsert").await?;
     audit::record_in_transaction(
@@ -789,66 +835,154 @@ pub(crate) async fn load_asset_summary(
     account_id: Uuid,
     asset_id: Uuid,
 ) -> Result<AssetSummary, AppError> {
-    let row = sqlx::query(
-        r#"
-        SELECT id, source_asset_id, media_kind, source_created_at_ms, favorite, archived,
-               CASE WHEN deleted_at IS NULL THEN NULL
-                    ELSE (CAST(strftime('%s', deleted_at) AS INTEGER) * 1000) END AS trashed_at_ms
-        FROM assets WHERE id = ? AND account_id = ?
-        "#,
-    )
-    .bind(asset_id)
-    .bind(account_id)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("asset not found"))?;
-    let resource_rows = sqlx::query(
-        r#"
-        SELECT r.id, r.role, r.filename, r.mime_type, r.metadata, b.plaintext_size
-        FROM resources r JOIN blobs b ON b.id = r.blob_id
-        WHERE r.asset_id = ? ORDER BY r.created_at, r.id
-        "#,
-    )
-    .bind(asset_id)
-    .fetch_all(pool)
-    .await?;
-    let tag_names: Vec<String> = sqlx::query_scalar(
-        r#"
-        SELECT t.name FROM tags t JOIN tag_assets ta ON ta.tag_id = t.id
-        WHERE ta.asset_id = ? ORDER BY lower(t.name), t.id
-        "#,
-    )
-    .bind(asset_id)
-    .fetch_all(pool)
-    .await?;
-    let resources = resource_rows
-        .into_iter()
-        .map(|resource| {
-            let resource_id: Uuid = resource.get("id");
-            ResourceSummary {
-                resource_id,
-                role: resource.get("role"),
-                filename: resource.get("filename"),
-                mime_type: resource.get("mime_type"),
-                content_size: resource.get::<i64, _>("plaintext_size") as u64,
+    let mut tx = pool.begin().await?;
+    let value = load_asset_summaries(&mut tx, account_id, &[asset_id])
+        .await?
+        .pop()
+        .ok_or_else(|| AppError::not_found("asset not found"))?;
+    tx.commit().await?;
+    Ok(value)
+}
+
+/// A page always needs three bulk reads, regardless of asset count; callers hold a read snapshot.
+async fn load_asset_summaries(
+    connection: &mut SqliteConnection,
+    account: Uuid,
+    ids: &[Uuid],
+) -> Result<Vec<AssetSummary>, AppError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    fn selected<'a>(sql: &'static str, account: Uuid, ids: &'a [Uuid]) -> QueryBuilder<'a, Sqlite> {
+        let mut q = QueryBuilder::new(sql);
+        q.push_bind(account).push(" AND a.id IN (");
+        let mut values = q.separated(",");
+        for id in ids {
+            values.push_bind(*id);
+        }
+        values.push_unseparated(")");
+        q
+    }
+    let rows = selected("SELECT a.id,a.source_asset_id,a.media_kind,a.source_created_at_ms,a.favorite,a.archived,
+        CASE WHEN a.deleted_at IS NULL THEN NULL ELSE CAST(strftime('%s',a.deleted_at) AS INTEGER)*1000 END AS trashed_at_ms
+        FROM assets a WHERE a.account_id=", account, ids).build().fetch_all(&mut *connection).await?;
+    let mut resource_query = selected("SELECT r.asset_id,r.id,r.role,r.filename,r.mime_type,r.metadata,b.plaintext_size
+        FROM resources r JOIN blobs b ON b.id=r.blob_id JOIN assets a ON a.id=r.asset_id WHERE a.account_id=", account, ids);
+    resource_query.push(" ORDER BY r.created_at,r.id");
+    let resources = resource_query.build().fetch_all(&mut *connection).await?;
+    let mut resource_map: HashMap<Uuid, Vec<ResourceSummary>> = HashMap::new();
+    for r in resources {
+        let id: Uuid = r.get("id");
+        resource_map
+            .entry(r.get("asset_id"))
+            .or_default()
+            .push(ResourceSummary {
+                resource_id: id,
+                role: r.get("role"),
+                filename: r.get("filename"),
+                mime_type: r.get("mime_type"),
+                content_size: r.get::<i64, _>("plaintext_size") as u64,
                 storage_encoding: StorageEncoding::PlainV1,
-                metadata: resource.get("metadata"),
-                manifest_path: format!("{API_BASE_PATH}/resources/{resource_id}"),
-                content_path: format!("{API_BASE_PATH}/resources/{resource_id}/content"),
-            }
+                metadata: r.get("metadata"),
+                manifest_path: format!("{API_BASE_PATH}/resources/{id}"),
+                content_path: format!("{API_BASE_PATH}/resources/{id}/content"),
+            });
+    }
+    let mut tag_query = selected(
+        "SELECT ta.asset_id,t.name FROM tags t JOIN tag_assets ta ON ta.tag_id=t.id
+        JOIN assets a ON a.id=ta.asset_id WHERE a.account_id=",
+        account,
+        ids,
+    );
+    tag_query.push(" ORDER BY lower(t.name),t.id");
+    let tags = tag_query.build().fetch_all(&mut *connection).await?;
+    let mut tag_map: HashMap<Uuid, Vec<String>> = HashMap::new();
+    for r in tags {
+        tag_map
+            .entry(r.get("asset_id"))
+            .or_default()
+            .push(r.get("name"));
+    }
+    let mut assets: HashMap<Uuid, AssetSummary> = rows
+        .into_iter()
+        .map(|r| {
+            let id: Uuid = r.get("id");
+            (
+                id,
+                AssetSummary {
+                    asset_id: id,
+                    source_asset_id: r.get("source_asset_id"),
+                    media_kind: parse_media_kind(r.get("media_kind")),
+                    source_created_at_ms: r.get("source_created_at_ms"),
+                    favorite: r.get("favorite"),
+                    archived: r.get("archived"),
+                    trashed_at_ms: r.get("trashed_at_ms"),
+                    resources: resource_map.remove(&id).unwrap_or_default(),
+                    tag_names: tag_map.remove(&id).unwrap_or_default(),
+                },
+            )
         })
         .collect();
-    Ok(AssetSummary {
-        asset_id,
-        source_asset_id: row.get("source_asset_id"),
-        media_kind: parse_media_kind(row.get::<String, _>("media_kind")),
-        source_created_at_ms: row.get("source_created_at_ms"),
-        favorite: row.get("favorite"),
-        archived: row.get("archived"),
-        trashed_at_ms: row.get("trashed_at_ms"),
-        tag_names,
-        resources,
-    })
+    Ok(ids.iter().filter_map(|id| assets.remove(id)).collect())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotQuery {
+    cursor: Option<Uuid>,
+    limit: Option<u32>,
+}
+
+/// Capture this watermark BEFORE walking snapshot pages. Replaying all later events repairs
+/// inserts/deletes concurrent with the walk; UUID ordering is independent of edited dates.
+pub async fn sync_head(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let sequence: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(MAX(sequence),0) FROM account_changes WHERE account_id=?",
+    )
+    .bind(auth.account_id)
+    .fetch_one(&state.pool)
+    .await?;
+    Ok(Json(
+        serde_json::json!({"sequence":sequence,"snapshot_protocol":"watermark-before-uuid-walk-v1"}),
+    ))
+}
+
+pub async fn snapshot(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    Query(query): Query<SnapshotQuery>,
+) -> Result<Json<TimelinePage>, AppError> {
+    let limit = query.limit.unwrap_or(100).clamp(1, 250) as usize;
+    let mut tx = state.pool.begin().await?;
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM assets WHERE account_id=? AND (? IS NULL OR id>?) ORDER BY id LIMIT ?",
+    )
+    .bind(auth.account_id)
+    .bind(query.cursor)
+    .bind(query.cursor)
+    .bind((limit + 1) as i64)
+    .fetch_all(&mut *tx)
+    .await?;
+    let next_cursor = (ids.len() > limit).then(|| ids[limit - 1].to_string());
+    let items =
+        load_asset_summaries(&mut tx, auth.account_id, &ids[..ids.len().min(limit)]).await?;
+    tx.commit().await?;
+    Ok(Json(TimelinePage { items, next_cursor }))
+}
+
+pub async fn devices(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let rows =
+        sqlx::query("SELECT id,name,platform FROM devices WHERE account_id=? ORDER BY name,id")
+            .bind(auth.account_id)
+            .fetch_all(&state.pool)
+            .await?;
+    Ok(Json(serde_json::Value::Array(rows.into_iter().map(|r| serde_json::json!({"device_id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"platform":r.get::<String,_>("platform")})).collect())))
 }
 
 fn parse_media_kind(value: String) -> MediaKind {

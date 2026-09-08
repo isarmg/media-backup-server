@@ -8,6 +8,7 @@ mod doctor;
 mod error;
 mod library;
 mod login_admission;
+mod media_delivery;
 mod metrics;
 mod password;
 mod release;

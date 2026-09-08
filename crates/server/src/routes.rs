@@ -4,9 +4,8 @@ mod foundation_platform;
 use axum::{
     body::Body,
     extract::{ConnectInfo, DefaultBodyLimit, Extension, Path, State},
-    http::{header, HeaderValue, StatusCode},
+    http::StatusCode,
     middleware,
-    response::{IntoResponse, Response},
     routing::{get, post, put},
     Json, Router,
 };
@@ -25,7 +24,6 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
     time::timeout,
 };
-use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::{
@@ -130,7 +128,17 @@ pub fn router(
         .route("/uploads/{id}/complete", post(complete_upload))
         .route("/resources", get(list_resources))
         .route("/resources/{id}", get(resource_manifest))
-        .route("/resources/{id}/content", get(resource_content))
+        .route(
+            "/resources/{id}/content",
+            get(crate::media_delivery::content),
+        )
+        .route(
+            "/resources/{id}/preview",
+            get(crate::media_delivery::preview),
+        )
+        .route("/sync/head", get(library::sync_head))
+        .route("/library/snapshot", get(library::snapshot))
+        .route("/devices", get(library::devices))
         .route("/timeline", get(library::timeline))
         .route("/sync", get(library::sync_changes))
         .route(
@@ -580,50 +588,6 @@ async fn resource_manifest(
     Ok(Json(
         load_manifest(&state.pool, auth.account_id, resource_id).await?,
     ))
-}
-
-async fn resource_content(
-    State(state): State<AppState>,
-    Extension(auth): Extension<AuthContext>,
-    Path(resource_id): Path<Uuid>,
-) -> Result<Response, AppError> {
-    let row = sqlx::query(
-        r#"
-        SELECT ac.storage_path AS account_storage_path, b.storage_path,
-               b.stored_size, r.mime_type
-        FROM resources r
-        JOIN assets a ON a.id = r.asset_id
-        JOIN accounts ac ON ac.id = a.account_id
-        JOIN blobs b ON b.id = r.blob_id
-        WHERE r.id = ? AND a.account_id = ?
-        "#,
-    )
-    .bind(resource_id)
-    .bind(auth.account_id)
-    .fetch_optional(&state.pool)
-    .await?
-    .ok_or_else(|| AppError::not_found("resource not found"))?;
-    let file = state
-        .storage
-        .open_blob(row.get("account_storage_path"), row.get("storage_path"))
-        .await?;
-    let stream = ReaderStream::new(file);
-    let mut response = Body::from_stream(stream).into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_str(&row.get::<String, _>("mime_type"))
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
-    response.headers_mut().insert(
-        header::CONTENT_LENGTH,
-        HeaderValue::from_str(&row.get::<i64, _>("stored_size").to_string())
-            .map_err(|_| AppError::bad_request("invalid content length"))?,
-    );
-    response.headers_mut().insert(
-        "x-media-backup-storage-encoding",
-        HeaderValue::from_static("plain-v1"),
-    );
-    Ok(response)
 }
 
 fn validate_upload_request(
