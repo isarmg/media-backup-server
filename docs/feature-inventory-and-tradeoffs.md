@@ -280,5 +280,5 @@ Server 与 Client 在打开状态前先验证唯一当前 Schema 和身份。发
 ## 图库扩展实施补充
 
 本次新增全库类型/日期/设备筛选、UUID 快照水位、资产/资源/标签批量 SQL、1600 像素派生预览，
-以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API 扩展](gallery-api.md)。
+以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API 扩展](https://github.com/isarmg/media-backup-server/blob/v0.3.0/docs/gallery-api.md)。
 移动实现以 Client 0.4.0 的实施记录为准，本文原移动端清单描述的是改造前快照。
