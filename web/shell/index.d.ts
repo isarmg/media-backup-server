@@ -5,6 +5,7 @@ import { type WorkspaceConfig } from "./workspace-config.js";
 export { HeaderActions, HeaderNavigation, InstanceHeaderActions, InstanceWorkspace, InstanceNameField, WorkspaceIcon } from "./workspace.js";
 export { DEFAULT_WORKSPACE_CONFIG, resolveWorkspaceConfig, validInstanceName } from "./workspace-config.js";
 export type { WorkspaceConfig } from "./workspace-config.js";
+export { AccountSettings } from "./account.js";
 export { AdministratorsPanel } from "./administrators.js";
 export type ProductIdentity = {
     name: string;
@@ -46,7 +47,7 @@ export declare class ApplicationErrorBoundary extends Component<{
     componentDidUpdate(previous: {
         resetKey?: string;
     }): void;
-    render(): string | number | bigint | boolean | Iterable<ReactNode> | Promise<string | number | bigint | boolean | import("react").ReactPortal | import("react").ReactElement<unknown, string | import("react").JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | import("react").JSX.Element | null | undefined;
+    render(): string | number | bigint | boolean | import("react").JSX.Element | Iterable<ReactNode> | Promise<string | number | bigint | boolean | import("react").ReactPortal | import("react").ReactElement<unknown, string | import("react").JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | null | undefined;
 }
 export declare function createSarmgAdminApplication(options: AdminApplicationOptions): () => import("react").JSX.Element;
 export declare function LoginPage({ login }: {

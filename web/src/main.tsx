@@ -1,7 +1,7 @@
 import { t } from "../shell/i18n.js";
 import { StrictMode, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { AdministratorsPanel, createSarmgAdminApplication, errorRequestId, useAdminApplication, HeaderNavigation, InstanceHeaderActions, InstanceWorkspace, InstanceNameField } from "../shell/index.js";
+import { AdministratorsPanel, createSarmgAdminApplication, errorRequestId, useAdminApplication, HeaderNavigation, InstanceHeaderActions, InstanceNameField } from "../shell/index.js";
 import { Button, Checkbox, ConfirmDangerDialog, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusBadge, Table, TextField } from "@sarmg/admin-ui";
 import "@sarmg/design-tokens/tokens.css";
 import "@sarmg/design-tokens/tokens.dark.css";
@@ -18,7 +18,11 @@ type View = "overview" | "users" | "administrators";
 const GIB = 1_073_741_824;
 function currentView(): View {
   const hash = window.location.hash.slice(1);
-  return hash === "users" || hash === "administrators" ? hash : "overview";
+  return hash.startsWith("users/") ? "users" : hash === "administrators" ? "administrators" : "overview";
+}
+function selectedUserFromLocation(): string | null {
+  if (!window.location.hash.startsWith("#users/")) return null;
+  try { return decodeURIComponent(window.location.hash.slice(7)); } catch { return null; }
 }
 function quotaBytes(value: FormDataEntryValue | null): number {
   const text = String(value ?? "").trim(), result = Number(text) * GIB;
@@ -35,12 +39,12 @@ function Application() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [generation, setGeneration] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(selectedUserFromLocation);
   const [creating, setCreating] = useState(false);
   const [createPending, setCreatePending] = useState(false);
   const reload = () => setGeneration(value => value + 1);
   useEffect(() => {
-    const changed = () => setView(currentView()); window.addEventListener("hashchange", changed);
+    const changed = () => { setView(currentView()); setSelected(selectedUserFromLocation()); }; window.addEventListener("hashchange", changed);
     return () => window.removeEventListener("hashchange", changed);
   }, []);
   useEffect(() => {
@@ -50,17 +54,15 @@ function Application() {
       .catch(error => { if (!controller.signal.aborted) setFailure({ requestId: errorRequestId(error) }); });
     return () => controller.abort();
   }, [generation, view]);
-  const user = overview?.users.find(item => item.id === selected) ?? overview?.users[0];
+  const user = overview?.users.find(item => item.id === selected);
   return <div className="media-business">
     <InstanceHeaderActions create={() => setCreating(true)} createLabel={t("新建备份用户", "Create backup user")} refresh={reload} />
-    <InstanceWorkspace instances={overview?.users.map(item => ({ id: item.id, name: item.display_name })) ?? []} selected={user?.id} select={setSelected} label={t("备份用户实例", "Backup user instances")} showSidebar={view === "users"}>
-    <HeaderNavigation label={t("备份管理功能", "Backup management navigation")}>{[["overview",t("总览", "Overview")],["users",t("备份用户", "Backup users")],["administrators",t("平台管理员", "Platform administrators")]].map(([id,name]) => <Button key={id} aria-pressed={view === id} onClick={() => { window.location.hash = id!; }}>{name}</Button>)}</HeaderNavigation>
+    <HeaderNavigation label={t("备份管理功能", "Backup management navigation")}>{[["overview",t("总览", "Overview")],["administrators",t("平台管理员", "Platform administrators")]].map(([id,name]) => <Button key={id} aria-pressed={view === id} onClick={() => { window.location.hash = id!; }}>{name}</Button>)}</HeaderNavigation>
     <h1 className="sarmg-visually-hidden">{view === "overview" ? t("备份总览", "Backup overview") : view === "users" ? t("备份用户", "Backup users") : t("平台管理员", "Platform administrators")}</h1>
     {view === "administrators" ? <AdministratorsPanel />
       : failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
       : overview === null ? <LoadingState>{t("正在载入备份数据…", "Loading backup data…")}</LoadingState>
-      : view === "overview" ? <OverviewView overview={overview} /> : <UsersView overview={{...overview, users:user ? [user] : []}} reload={reload} />}
-    </InstanceWorkspace>
+      : view === "overview" ? <OverviewView overview={overview} /> : <><a href="#overview">{t("返回用户概览", "Back to user overview")}</a>{user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("此备份用户不存在，请返回总览选择。", "This backup user is unavailable. Return to the overview to select a user.")}</EmptyState>}</>}
     {creating && <Dialog title={t("新建备份用户", "Create backup user")} onClose={() => { if (!createPending) setCreating(false); }}><BackupUserForm pendingChanged={setCreatePending} reload={() => { setCreating(false); reload(); }} /></Dialog>}
   </div>;
 }
@@ -74,15 +76,18 @@ function OverviewView({ overview }: { overview: Overview }) {
       <tr><th scope="row">{t("上传预留空间", "Reserved upload space")}</th><td>{bytes(overview.pending_bytes)}</td></tr>
       <tr><th scope="row">{t("已分配配额", "Allocated quota")}</th><td>{bytes(overview.quota_bytes)}{overview.unlimited_users > 0 ? t(" + 不限", " + Unlimited") : ""}</td></tr>
     </tbody>
-  </Table></Section><Section title={t("用户概览", "User overview")}><div className="media-grid">
-    {overview.users.length === 0 ? <EmptyState>{t("暂无备份用户", "No backup users yet")}</EmptyState> : overview.users.map(user => <article className="media-card sarmg-content-panel" key={user.id}>
-      <h3>{user.display_name}</h3><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} />
-      <dl><dt>{t("账号", "Account")}</dt><dd>{user.username}</dd><dt>{t("设备", "Devices")}</dt><dd>{user.device_count}</dd>
-        <dt>{t("资源", "Resources")}</dt><dd>{user.resource_count}</dd><dt>{t("容量", "Storage")}</dt><dd>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}</dd>
-        <dt>{t("上传预留", "Upload reservation")}</dt><dd>{bytes(user.pending_bytes)}</dd><dt>{t("存储路径", "Storage path")}</dt><dd>{user.storage_path}</dd></dl>
-      <progress max={1} value={user.quota_bytes > 0 ? Math.min(1, user.used_bytes / user.quota_bytes) : 0} aria-label={user.username + t(" 存储配额占用比例", " Storage quota usage")} />
-    </article>)}
-  </div></Section></div>;
+  </Table></Section><Section title={t("用户概览", "User overview")}>
+    {overview.users.length === 0 ? <EmptyState>{t("暂无备份用户", "No backup users yet")}</EmptyState> : <div className="media-overview-table"><Table aria-label={t("用户概览", "User overview")}>
+      <thead><tr>{[t("用户", "User"), t("账号", "Account"), t("状态", "Status"), t("设备", "Devices"), t("资源", "Resources"), t("已用容量 / 配额", "Used / quota"), t("上传预留", "Upload reservation"), t("存储路径", "Storage path")].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
+      <tbody>{overview.users.map(user => <tr key={user.id}>
+        <th scope="row"><a href={"#users/" + encodeURIComponent(user.id)}>{user.display_name}</a></th>
+        <td>{user.username}</td><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td>
+        <td>{user.device_count}</td><td>{user.resource_count}</td>
+        <td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}<progress max={1} value={user.quota_bytes > 0 ? Math.min(1, user.used_bytes / user.quota_bytes) : 0} aria-label={user.username + t(" 存储配额占用比例", " Storage quota usage")} /></td>
+        <td>{bytes(user.pending_bytes)}</td><td>{user.storage_path}</td>
+      </tr>)}</tbody>
+    </Table></div>}
+  </Section></div>;
 }
 
 function UsersView({ overview, reload }: { overview: Overview; reload(): void }) {

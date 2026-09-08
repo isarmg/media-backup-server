@@ -336,7 +336,7 @@ fn initialize_current_database(path: &Path) -> anyhow::Result<()> {
                  ) VALUES (1, ?, ?, ?, ?)",
                 params![
                     APPLICATION,
-                    env!("CARGO_PKG_VERSION"),
+                    "0.3.0",
                     CURRENT_SCHEMA_REVISION,
                     CURRENT_SCHEMA_SHA256
                 ],
@@ -458,7 +458,7 @@ fn foundation_schema_rows(connection: &Connection) -> anyhow::Result<Vec<SchemaR
 pub(crate) fn current_schema_identity() -> anyhow::Result<SchemaIdentity> {
     SchemaIdentity::new(
         APPLICATION,
-        env!("CARGO_PKG_VERSION"),
+        "0.3.0",
         u64::try_from(CURRENT_SCHEMA_REVISION).context("schema revision must not be negative")?,
         CURRENT_SCHEMA_SHA256,
     )
@@ -556,7 +556,7 @@ mod tests {
             metadata,
             (
                 APPLICATION.to_string(),
-                env!("CARGO_PKG_VERSION").to_string(),
+                "0.3.0".to_string(),
                 CURRENT_SCHEMA_REVISION,
                 CURRENT_SCHEMA_SHA256.to_string()
             )
@@ -643,12 +643,7 @@ mod tests {
                 "INSERT INTO product_metadata (
                      singleton, application, application_version, schema_revision, schema_sha256
                  ) VALUES (1, ?, ?, ?, ?)",
-                params![
-                    APPLICATION,
-                    env!("CARGO_PKG_VERSION"),
-                    CURRENT_SCHEMA_REVISION,
-                    fingerprint
-                ],
+                params![APPLICATION, "0.3.0", CURRENT_SCHEMA_REVISION, fingerprint],
             )
             .unwrap();
         assert!(sqlite_sidecar(&database, "-wal").exists());
@@ -700,7 +695,7 @@ mod tests {
                  );
                  INSERT INTO product_metadata VALUES
                      (1, '{APPLICATION}', '{}', {CURRENT_SCHEMA_REVISION}, '{CURRENT_SCHEMA_SHA256}');",
-                env!("CARGO_PKG_VERSION")
+                "0.3.0"
             ))
             .unwrap();
         drop(connection);

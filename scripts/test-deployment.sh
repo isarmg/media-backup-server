@@ -2,9 +2,9 @@
 set -euo pipefail
 
 readonly archive_arg="${1:-${MEDIA_BACKUP_RELEASE_ARCHIVE:-}}"
-readonly package="media-backup-server-0.3.0-x86_64-unknown-linux-gnu"
-readonly version="0.3.0"
-readonly contract="355dc1fffa702e61b664d426fcee41149903ace6e55d75424a06a5b76e04896e"
+readonly package="media-backup-server-0.3.1-x86_64-unknown-linux-gnu"
+readonly version="0.3.1"
+readonly contract="4f521b4da1ffce11a0b9f9fd39989b16a89cc518f467088def29c5589c6b7112"
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly project_dir
 
@@ -29,7 +29,7 @@ cleanup() {
 trap cleanup EXIT
 
 [[ -n "$archive_arg" ]] ||
-  fail "usage: test-deployment.sh /absolute/path/media-backup-server-0.3.0-x86_64-unknown-linux-gnu.tar.gz"
+  fail "usage: test-deployment.sh /absolute/path/media-backup-server-0.3.1-x86_64-unknown-linux-gnu.tar.gz"
 [[ "$archive_arg" = /* && -f "$archive_arg" && ! -L "$archive_arg" ]] ||
   fail "release archive must be an absolute regular non-symlink file"
 [[ "$(stat -c '%h' -- "$archive_arg")" == "1" ]] || fail "release archive has a hard-link alias"
@@ -74,14 +74,14 @@ expected_keys = {
 }
 assert isinstance(identity, dict) and set(identity) == expected_keys
 assert identity["product"] == "media-backup-server"
-assert identity["version"] == "0.3.0"
+assert identity["version"] == "0.3.1"
 assert re.fullmatch(r"[0-9a-f]{40}", identity["source_revision"])
 assert identity["target"] == "x86_64-unknown-linux-gnu"
 assert identity["api_version"] == "v2"
 assert identity["storage_encoding"] == "plain-v1"
 assert identity["server_schema_revision"] == 2
 assert identity["server_schema_sha256"] == "6415edde88228d508f1c0c7582f119c8fe869d2d78fd85129f359a5d748cbbc2"
-assert identity["release_contract_sha256"] == "355dc1fffa702e61b664d426fcee41149903ace6e55d75424a06a5b76e04896e"
+assert identity["release_contract_sha256"] == "4f521b4da1ffce11a0b9f9fd39989b16a89cc518f467088def29c5589c6b7112"
 PY
 source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
 verification="$($real_binary release-verify "$release_root")"
@@ -506,7 +506,7 @@ for setting in \
   'StateDirectory=isarmg/media-backup' \
   'RuntimeDirectory=isarmg/media-backup' \
   'EnvironmentFile=/etc/isarmg/media-backup.env' \
-  'ExecStart=/opt/isarmg/media-backup/releases/0.3.0/bin/media-backup-server serve-release /opt/isarmg/media-backup/releases/0.3.0' \
+  'ExecStart=/opt/isarmg/media-backup/releases/0.3.1/bin/media-backup-server serve-release /opt/isarmg/media-backup/releases/0.3.1' \
   'ReadWritePaths=/var/lib/isarmg/media-backup /run/isarmg/media-backup' \
   'ProtectSystem=strict' \
   'ProtectHome=true' \

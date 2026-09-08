@@ -50,6 +50,9 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   .sarmg-instance-detail { min-width: 0; display: grid; gap: 16px; }
   .sarmg-instance-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
   .sarmg-instance-detail dd { margin: 0; overflow-wrap: anywhere; }
+  @media (max-width: 360px) {
+    .sarmg-header-actions { gap: 2px; }
+  }
   @media (max-width: 48rem) {
     .sarmg-instance-workspace { grid-template-columns: minmax(0, 1fr); }
     .sarmg-instance-sidebar { position: static; max-height: 40dvh; padding: 4px; }

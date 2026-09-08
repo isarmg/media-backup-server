@@ -72,7 +72,7 @@ try {
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
       await expect(page.getByRole("banner").locator('small')).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "验收备份账户", exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toBeVisible();
       assert.ok(await page.evaluate(async () => {
         const normal = await document.fonts.load('16px "Sarmg Maple"');
         const italic = await document.fonts.load('italic 16px "Sarmg Maple"');
@@ -87,12 +87,21 @@ try {
       failOverview = true;
       await page.getByRole("button", { name: "刷新", exact: true }).click();
       await expect(page.getByRole("alert")).toContainText("overview-failure-123");
-      await expect(page.getByRole("heading", { name: "验收备份账户", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toHaveCount(0);
       await expect(page.locator("body")).not.toContainText("SECRET");
       await page.getByRole("button", { name: "重试", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "验收备份账户", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "备份用户", exact: true }).click();
-      await expect(page.getByRole("complementary", { name: "备份用户实例" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toBeVisible();
+      const userTable = page.getByRole("table", { name: "用户概览", exact: true });
+      await expect(userTable.getByRole("columnheader")).toHaveText(["用户", "账号", "状态", "设备", "资源", "已用容量 / 配额", "上传预留", "存储路径"]);
+      await userTable.getByRole("link", { name: "验收备份账户", exact: true }).click();
+      await expect(page).toHaveURL(new RegExp("#users/" + users[0].id + "$"));
+      await page.reload();
+      await expect(page.getByRole("form", { name: "编辑备份用户 backup", exact: true })).toBeVisible();
+      await expect(page.getByRole("complementary")).toHaveCount(0);
+      await page.getByRole("button", { name: "账号设置", exact: true }).click();
+      const account = page.getByRole("dialog", { name: "账号设置", exact: true });
+      await expect(account.getByLabel("账号名称", { exact: true })).toHaveValue("admin");
+      await account.getByRole("button", { name: "取消", exact: true }).click();
       await page.getByRole("button", { name: "新建备份用户", exact: true }).click();
       const create = page.getByRole("form", { name: "创建备份用户", exact: true });
       await create.getByLabel("名称", { exact: true }).fill("新建备份账户");
@@ -106,9 +115,11 @@ try {
       assert.equal(mutations.length, 1);
       await create.getByLabel("密码", { exact: true }).fill("test backup password");
       await create.getByRole("button", { name: "创建备份用户", exact: true }).click();
-      await page.getByRole("button", { name: "选择实例 新建备份账户", exact: true }).click();
+      await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
+      await page.getByRole("link", { name: "新建备份账户", exact: true }).click();
       await expect(page.getByRole("form", { name: "编辑备份用户 new-backup", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "选择实例 验收备份账户", exact: true }).click();
+      await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
+      await page.getByRole("link", { name: "验收备份账户", exact: true }).click();
       const edit = page.getByRole("form", { name: "编辑备份用户 backup", exact: true });
       await edit.getByLabel("名称", { exact: true }).fill("已更新备份账户");
       await edit.getByRole("button", { name: "保存备份用户", exact: true }).click();
@@ -144,12 +155,15 @@ try {
       }
       await page.getByRole("button", { name: "平台管理员", exact: true }).click();
       await expect(page.getByRole("form", { name: "创建备份用户", exact: true })).toHaveCount(0);
-      await page.getByRole("button", { name: "创建管理员", exact: true }).click();
-      await page.getByLabel("用户名", { exact: true }).fill("secondary");
-      await page.getByLabel("新密码", { exact: true }).fill("test admin password");
-      await page.getByRole("button", { name: "保存管理员", exact: true }).click();
-      await expect(page.getByRole("rowheader", { name: "secondary", exact: true })).toBeVisible();
-      await checkWebLanguage(page, {"routes":[["overview","Overview"],["users","Backup users"],["administrators","Platform administrators"]],"names":["验收备份账户","新建备份账户","已更新备份账户"]});
+      await expect(page.getByRole("button", { name: "创建管理员", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("table", { name: "管理员账号", exact: true }).getByRole("rowheader")).toHaveText("admin");
+
+      await checkWebLanguage(page, {"routes":[["overview","Overview"],["administrators","Platform administrators"]],"names":["验收备份账户","新建备份账户","已更新备份账户"]});
+      await page.goto(`http://127.0.0.1:${address.port}/admin/#users/missing`);
+      await expect(page.getByText("此备份用户不存在，请返回总览选择。", { exact: true })).toBeVisible();
+      await expect(page.getByRole("form", { name: /^编辑备份用户/ })).toHaveCount(0);
+      await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
+      await expect(page.getByRole("table", { name: "用户概览", exact: true })).toBeVisible();
       assert.deepEqual(errors, []);
       console.log(`${engine.name()}: Media overview/retry, backup account create/edit/disable/reset, separate platform administrators, font assets, modal focus and mobile WCAG AA passed`);
       await context.close();

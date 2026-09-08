@@ -13,9 +13,9 @@ for (const name of sources) {
   assert.ok(!source.includes('from "@sarmg/admin-shell"'), "Use one shared Shell/context implementation throughout this product");
 }
 console.log("Reviewed Foundation Shell snapshot verified");
-const policy = JSON.parse(await readFile(new URL("../../foundation/platform-router.json", root), "utf8").catch(error => { if (error.code === "ENOENT") return "null"; throw error; }));
+const policy = JSON.parse(await readFile(new URL("../../../foundation/platform-router.json", root), "utf8").catch(error => { if (error.code === "ENOENT") return "null"; throw error; }));
 if (policy) {
-  const router = await readFile(new URL("../../foundation/platform_router.rs", root));
+  const router = await readFile(new URL("../../../foundation/platform_router.rs", root));
   assert.equal(createHash("sha256").update(router).digest("hex"), policy.sha256, "Foundation platform router snapshot");
   assert.equal(policy.diagnostics, false);
   assert.ok(!router.toString().includes("get(diagnostics"));

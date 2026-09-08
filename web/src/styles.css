@@ -1,9 +1,14 @@
 /* Business layout only; Foundation owns fonts, themes and UI controls. */
 .media-business { min-width: 0; }
-.media-sections { display: grid; gap: 2rem; margin-top: 1.5rem; }
+.media-sections { grid-template-columns: minmax(0, 1fr); display: grid; gap: 2rem; margin-top: 1.5rem; }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
 .media-card { min-width: 0; overflow-wrap: anywhere; }
 .media-card dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
 .media-card dd { margin: 0; }
 .media-card progress { width: 100%; }
 .media-check { display: flex; align-items: center; gap: .5rem; }
+
+.media-overview-table { overflow-x: auto; }
+.media-overview-table th, .media-overview-table td { vertical-align: middle; }
+.media-overview-table td:last-child { overflow-wrap: anywhere; min-width: 12rem; }
+.media-overview-table progress { display: block; width: 100%; margin-top: .25rem; }
