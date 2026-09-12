@@ -20,7 +20,7 @@ try {
     try {
       const context = await browser.newContext({ locale: "zh-CN",  viewport: { width: 360, height: 740 } });
       const page = await context.newPage(), errors = [], mutations = [];
-      let users = [backupUser()], failOverview = false, failReset = true, failCreate = true, administratorCreated = false;
+      let users = [backupUser()], failOverview = false, failReset = true, failCreate = true;
       page.on("pageerror", error => errors.push(error.message));
       await page.route("**/api/v2/**", async route => {
         const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
@@ -51,11 +51,6 @@ try {
           assert.deepEqual(request.postDataJSON(), { password: "reset backup password" });
           if (failReset) { failReset = false; return failure("reset-failure-123"); }
           return route.fulfill({ status: 204 });
-        }
-        if (path === "/api/v2/platform/administrators") {
-          if (method === "POST") { assert.deepEqual(request.postDataJSON(), { username: "secondary", password: "test admin password" }); administratorCreated = true; return route.fulfill({ status: 204 }); }
-          const record = { administrator_id: session.user_id, username: "admin", active: true, created_at_micros: 1, updated_at_micros: 2, last_login_at_micros: null };
-          return route.fulfill({ json: administratorCreated ? [record, { ...record, administrator_id: "B".repeat(43), username: "secondary" }] : [record] });
         }
         throw new Error(`Unexpected API request ${method} ${path}`);
       });
@@ -153,19 +148,16 @@ try {
         assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       }
-      await page.getByRole("button", { name: "平台管理员", exact: true }).click();
-      await expect(page.getByRole("form", { name: "创建备份用户", exact: true })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "创建管理员", exact: true })).toHaveCount(0);
-      await expect(page.getByRole("table", { name: "管理员账号", exact: true }).getByRole("rowheader")).toHaveText("admin");
-
-      await checkWebLanguage(page, {"routes":[["overview","Overview"],["administrators","Platform administrators"]],"names":["验收备份账户","新建备份账户","已更新备份账户"]});
+      await expect(page.getByRole("button", { name: "平台管理员", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "管理员账号", exact: true })).toHaveCount(0);
+      await checkWebLanguage(page, {"routes":[["overview","Overview"]],"names":["验收备份账户","新建备份账户","已更新备份账户"]});
       await page.goto(`http://127.0.0.1:${address.port}/admin/#users/missing`);
       await expect(page.getByText("此备份用户不存在，请返回总览选择。", { exact: true })).toBeVisible();
       await expect(page.getByRole("form", { name: /^编辑备份用户/ })).toHaveCount(0);
       await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
       await expect(page.getByRole("table", { name: "用户概览", exact: true })).toBeVisible();
       assert.deepEqual(errors, []);
-      console.log(`${engine.name()}: Media overview/retry, backup account create/edit/disable/reset, separate platform administrators, font assets, modal focus and mobile WCAG AA passed`);
+      console.log(`${engine.name()}: Media overview/retry, backup account create/edit/disable/reset, account settings, font assets, modal focus and mobile WCAG AA passed`);
       await context.close();
     } finally { await browser.close(); }
   }

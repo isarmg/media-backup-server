@@ -1,7 +1,7 @@
 import { t } from "../shell/i18n.js";
 import { StrictMode, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { AdministratorsPanel, createSarmgAdminApplication, errorRequestId, useAdminApplication, HeaderNavigation, InstanceHeaderActions, InstanceNameField } from "../shell/index.js";
+import { createSarmgAdminApplication, errorRequestId, useAdminApplication, HeaderNavigation, InstanceHeaderActions, InstanceNameField } from "../shell/index.js";
 import { Button, Checkbox, ConfirmDangerDialog, Dialog, EmptyState, ErrorState, FormField, LoadingState, StatusBadge, Table, TextField } from "@sarmg/admin-ui";
 import "@sarmg/design-tokens/tokens.css";
 import "@sarmg/design-tokens/tokens.dark.css";
@@ -14,11 +14,11 @@ import "../appearance/content-blocks.css";
 import { administratorApi, isBackupUser, isOverview, isUndefined, request, type BackupUser, type Overview } from "./api";
 
 type Failure = { requestId?: string };
-type View = "overview" | "users" | "administrators";
+type View = "overview" | "users";
 const GIB = 1_073_741_824;
 function currentView(): View {
   const hash = window.location.hash.slice(1);
-  return hash.startsWith("users/") ? "users" : hash === "administrators" ? "administrators" : "overview";
+  return hash.startsWith("users/") ? "users" : "overview";
 }
 function selectedUserFromLocation(): string | null {
   if (!window.location.hash.startsWith("#users/")) return null;
@@ -57,10 +57,9 @@ function Application() {
   const user = overview?.users.find(item => item.id === selected);
   return <div className="media-business">
     <InstanceHeaderActions create={() => setCreating(true)} createLabel={t("新建备份用户", "Create backup user")} refresh={reload} />
-    <HeaderNavigation label={t("备份管理功能", "Backup management navigation")}>{[["overview",t("总览", "Overview")],["administrators",t("平台管理员", "Platform administrators")]].map(([id,name]) => <Button key={id} aria-pressed={view === id} onClick={() => { window.location.hash = id!; }}>{name}</Button>)}</HeaderNavigation>
-    <h1 className="sarmg-visually-hidden">{view === "overview" ? t("备份总览", "Backup overview") : view === "users" ? t("备份用户", "Backup users") : t("平台管理员", "Platform administrators")}</h1>
-    {view === "administrators" ? <AdministratorsPanel />
-      : failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
+    <HeaderNavigation label={t("备份管理功能", "Backup management navigation")}>{[["overview",t("总览", "Overview")]].map(([id,name]) => <Button key={id} aria-pressed={view === id} onClick={() => { window.location.hash = id!; }}>{name}</Button>)}</HeaderNavigation>
+    <h1 className="sarmg-visually-hidden">{view === "overview" ? t("备份总览", "Backup overview") : t("备份用户", "Backup users")}</h1>
+    {failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
       : overview === null ? <LoadingState>{t("正在载入备份数据…", "Loading backup data…")}</LoadingState>
       : view === "overview" ? <OverviewView overview={overview} /> : <><a href="#overview">{t("返回用户概览", "Back to user overview")}</a>{user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("此备份用户不存在，请返回总览选择。", "This backup user is unavailable. Return to the overview to select a user.")}</EmptyState>}</>}
     {creating && <Dialog title={t("新建备份用户", "Create backup user")} onClose={() => { if (!createPending) setCreating(false); }}><BackupUserForm pendingChanged={setCreatePending} reload={() => { setCreating(false); reload(); }} /></Dialog>}
@@ -91,7 +90,7 @@ function OverviewView({ overview }: { overview: Overview }) {
 }
 
 function UsersView({ overview, reload }: { overview: Overview; reload(): void }) {
-  return <div className="media-sections"><p>{t("备份用户用于设备上传，与平台管理员账户相互独立。配额为 0 表示不限。", "Backup users upload from devices and are separate from platform administrators. A quota of 0 means unlimited.")}</p>
+  return <div className="media-sections"><p>{t("备份用户用于设备上传。配额为 0 表示不限。", "Backup users upload from devices. A quota of 0 means unlimited.")}</p>
     <Section title={t("管理备份用户", "Manage backup users")}><div className="media-grid">
       {overview.users.length === 0 ? <EmptyState>{t("暂无备份用户", "No backup users yet")}</EmptyState> : overview.users.map(user => <BackupUserForm key={user.id} user={user} reload={reload} />)}
     </div></Section></div>;

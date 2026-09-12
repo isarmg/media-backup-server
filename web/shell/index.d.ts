@@ -6,7 +6,6 @@ export { HeaderActions, HeaderNavigation, InstanceHeaderActions, InstanceWorkspa
 export { DEFAULT_WORKSPACE_CONFIG, resolveWorkspaceConfig, validInstanceName } from "./workspace-config.js";
 export type { WorkspaceConfig } from "./workspace-config.js";
 export { AccountSettings } from "./account.js";
-export { AdministratorsPanel } from "./administrators.js";
 export type ProductIdentity = {
     name: string;
 };
