@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { t } from "./i18n.js";
-import { languageLabel, switchLanguage, validationMessage } from "./i18n.js";
+import { t } from "@sarmg/admin-ui/i18n";
+import { languageLabel, switchLanguage, validationMessage } from "@sarmg/admin-ui/i18n";
 import { Component, createContext, useCallback, useContext, useEffect, useId, useRef, useState, } from "react";
 import { Button, ErrorState, FormField, IconButton, PageHeader, TextField, Toast, } from "@sarmg/admin-ui";
 import { createAdministratorApiClient, } from "@sarmg/admin-web";
@@ -61,7 +61,8 @@ export function createSarmgAdminApplication(options) {
 }
 function AdminShell({ options, client }) {
     const session = useAdministratorSession(client);
-    const fontsReady = useApplicationFontsReady();
+    const workspace = resolveWorkspaceConfig(options.workspace);
+    const fontState = useApplicationFontsReady(workspace.fontFamily);
     const [accountUpdated, setAccountUpdated] = useState(false);
     const [logoutPending, setLogoutPending] = useState(false);
     const [logoutError, setLogoutError] = useState(null);
@@ -69,13 +70,14 @@ function AdminShell({ options, client }) {
     const sequence = useRef(0);
     const [headerActions, setHeaderActions] = useState(null);
     const [headerNavigation, setHeaderNavigation] = useState(null);
-    const workspace = resolveWorkspaceConfig(options.workspace);
+    const activeFontFamily = fontState === "fallback" && workspace.fontFamily.includes("Sarmg Maple")
+        ? "ui-monospace,monospace" : workspace.fontFamily;
     useEffect(() => {
         const root = document.documentElement;
         const previous = { appearance: root.dataset.sarmgAppearance, selection: root.dataset.sarmgSelection, font: root.style.getPropertyValue("--sarmg-font-ui") };
         root.dataset.sarmgAppearance = workspace.appearance;
         root.dataset.sarmgSelection = workspace.selection;
-        root.style.setProperty("--sarmg-font-ui", workspace.fontFamily);
+        root.style.setProperty("--sarmg-font-ui", activeFontFamily);
         return () => {
             if (previous.appearance === undefined)
                 delete root.dataset.sarmgAppearance;
@@ -90,7 +92,7 @@ function AdminShell({ options, client }) {
             else
                 root.style.removeProperty("--sarmg-font-ui");
         };
-    }, [workspace.appearance, workspace.selection, workspace.fontFamily]);
+    }, [workspace.appearance, workspace.selection, activeFontFamily]);
     const notify = useCallback((message) => {
         const id = ++sequence.current;
         setToasts(current => [...current.slice(-4), { id, message: message.slice(0, 512) }]);
@@ -109,7 +111,7 @@ function AdminShell({ options, client }) {
         }
     }, [session.phase]);
     const identity = _jsx("div", { className: "sarmg-product-identity", children: _jsx("strong", { children: options.product.name }) });
-    if (session.phase === "loading" || !fontsReady)
+    if (session.phase === "loading" || fontState === "loading")
         return _jsx(ApplicationBootScreen, {});
     if (session.phase !== "authenticated") {
         return _jsxs("div", { className: "sarmg-auth-shell", children: [_jsx("div", { className: "sarmg-auth-language", style: { position: "absolute", insetBlockStart: "1rem", insetInlineEnd: "1rem" }, children: _jsx(LanguageToggle, {}) }), _jsxs("div", { className: "sarmg-auth-card", children: [identity, accountUpdated && _jsx("p", { role: "status", children: t("账号已更新，请使用新账号信息登录。", "Account updated. Sign in with your updated credentials.") }), session.phase === "error" ? _jsx(ErrorState, { requestId: errorRequestId(session.error), onRetry: () => void session.restore(), children: t("无法恢复管理员会话。", "Unable to restore administrator session.") })
@@ -134,26 +136,43 @@ function AdminShell({ options, client }) {
                     }, children: t("跳至正文", "Skip to content") }), _jsxs(PageHeader, { children: [_jsx("div", { className: "sarmg-header-navigation-slot", children: _jsxs("div", { className: "sarmg-header-brand-navigation", children: [identity, _jsx("div", { ref: setHeaderNavigation, style: { display: "contents" }, children: options.navigation.length > 0 && _jsx("nav", { className: "sarmg-header-navigation", "aria-label": t("产品导航", "Product navigation"), children: options.navigation.map(item => _jsx("a", { href: item.href, "aria-current": (item.href.startsWith("#") ? location.endsWith(item.href) : location === item.href) ? "page" : undefined, children: item.label }, item.href)) }) })] }) }), _jsxs("div", { className: "sarmg-header-actions", role: "group", "aria-label": t("全局操作", "Global actions"), children: [_jsx("div", { ref: setHeaderActions, style: { display: "contents" } }), _jsx(LanguageToggle, {}), _jsx(ThemeToggle, {}), _jsx(IconButton, { disabled: logoutPending, "aria-label": logoutPending ? t("正在退出…", "Signing out…") : t("退出", "Sign out"), title: logoutPending ? t("正在退出…", "Signing out…") : t("退出", "Sign out"), onClick: () => void logout(), children: workspace.headerControls === "icons" ? _jsx(WorkspaceIcon, { name: "logout" }) : t("退出", "Sign out") }), _jsx(AccountSettings, { client: client, username: session.session.username, onUpdated: () => setAccountUpdated(true) })] })] }), toasts.length > 0 && _jsx("div", { className: "sarmg-toast-stack", role: "region", "aria-label": t("通知", "Notifications"), children: toasts.map(toast => _jsxs(Toast, { children: [_jsx("span", { children: toast.message }), _jsx(IconButton, { "aria-label": t("关闭通知", "Dismiss notification"), onClick: () => setToasts(current => current.filter(item => item.id !== toast.id)), children: "\u00D7" })] }, toast.id)) }), _jsx("div", { className: "sarmg-shell-layout sarmg-shell-layout--full", children: _jsxs("main", { id: "sarmg-main-content", className: "sarmg-shell-main", tabIndex: -1, children: [logoutError !== null && _jsx(ErrorState, { requestId: errorRequestId(logoutError), children: t("无法确认退出结果，请重试。", "Sign out could not be confirmed. Try again.") }), _jsx(ApplicationErrorBoundary, { resetKey: location, children: _jsx(WorkspaceContext.Provider, { value: workspace, children: _jsx(HeaderNavigationContext.Provider, { value: headerNavigation, children: _jsx(HeaderActionsContext.Provider, { value: headerActions, children: options.routes }) }) }) })] }) })] }) });
 }
 const CORE_FONT_SAMPLE = "管理员登录 Username Password Sign in";
-/** Keep the first interactive frame opaque until the UI font has settled. */
-function useApplicationFontsReady() {
-    const [ready, setReady] = useState(() => typeof document === "undefined");
+const FONT_BOOT_TIMEOUT_MS = 1200;
+/** Wait only for the compact first-paint faces, then keep one font choice for this navigation. */
+function useApplicationFontsReady(fontFamily) {
+    const usesMaple = fontFamily.includes("Sarmg Maple");
+    const [state, setState] = useState(() => typeof document === "undefined" || !usesMaple ? "ready" : "loading");
     useEffect(() => {
-        if (typeof document === "undefined" || !document.fonts) {
-            setReady(true);
+        if (typeof document === "undefined" || !document.fonts || !usesMaple) {
+            setState("ready");
             return;
         }
         let active = true;
-        void Promise.allSettled([
-            document.fonts.load('400 16px "Sarmg Maple"', CORE_FONT_SAMPLE),
-            document.fonts.load('700 16px "Sarmg Maple"', CORE_FONT_SAMPLE),
-            document.fonts.ready,
-        ]).then(() => {
-            if (active)
-                setReady(true);
+        setState("loading");
+        const timeout = window.setTimeout(() => {
+            if (active) {
+                active = false;
+                setState("fallback");
+            }
+        }, FONT_BOOT_TIMEOUT_MS);
+        void Promise.all([
+            document.fonts.load('400 16px "Sarmg Maple Bootstrap"', CORE_FONT_SAMPLE),
+            document.fonts.load('700 16px "Sarmg Maple Bootstrap"', CORE_FONT_SAMPLE),
+        ]).then(results => {
+            if (!active)
+                return;
+            active = false;
+            window.clearTimeout(timeout);
+            setState(results.every(faces => faces.length > 0) ? "ready" : "fallback");
+        }, () => {
+            if (!active)
+                return;
+            active = false;
+            window.clearTimeout(timeout);
+            setState("fallback");
         });
-        return () => { active = false; };
-    }, []);
-    return ready;
+        return () => { active = false; window.clearTimeout(timeout); };
+    }, [usesMaple]);
+    return state;
 }
 function ApplicationBootScreen() {
     return _jsx("div", { className: "sarmg-application-boot", role: "status", "aria-busy": "true", "aria-label": t("正在准备应用…", "Preparing application…") });

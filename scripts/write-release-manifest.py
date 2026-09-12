@@ -40,6 +40,8 @@ EXPECTED_FILES = {
     "share/web/assets/admin.js": 0o644,
     "share/web/assets/admin.css": 0o644,
     "share/web/assets/CJK-LICENSE.txt": 0o644,
+    "share/web/assets/MapleMonoBootstrap-Regular.woff2": 0o644,
+    "share/web/assets/MapleMonoBootstrap-Bold.woff2": 0o644,
     "share/web/assets/MapleMonoNormalNL-Regular.woff2": 0o644,
     "share/web/assets/MapleMonoNormalNL-Bold.woff2": 0o644,
     "share/web/assets/MapleMono-OFL.txt": 0o644,
@@ -169,7 +171,7 @@ def main() -> None:
         fail("binary release identity has an unknown or missing field")
     fixed_identity = {
         "product": "media-backup-server",
-        "version": "0.3.2",
+        "version": "0.3.3",
         "source_revision": revision,
         "target": "x86_64-unknown-linux-gnu",
         "api_version": "v2",

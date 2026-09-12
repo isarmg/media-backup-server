@@ -25,6 +25,8 @@ assert.ok(css.includes('font-style:normal;font-weight:700'));
 assert.ok(!css.includes('font-weight:100 900'));
 assert.ok(css.includes('MapleMonoNormalNL-Regular.woff2'));
 assert.ok(css.includes('MapleMonoNormalNL-Bold.woff2'));
+assert.ok(css.includes('MapleMonoBootstrap-Regular.woff2'));
+assert.ok(css.includes('MapleMonoBootstrap-Bold.woff2'));
 assert.ok(!css.includes('Italic.woff2'));
 assert.equal(provenance.latin.handwriting, false);
 assert.ok(!css.includes('url("./MapleMono.woff2")'));

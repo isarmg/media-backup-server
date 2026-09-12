@@ -1,7 +1,7 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useRef, useState } from "react";
 import { Button, Dialog, ErrorState, FormField, IconButton, TextField } from "@sarmg/admin-ui";
-import { t } from "./i18n.js";
+import { t } from "@sarmg/admin-ui/i18n";
 import {} from "@sarmg/admin-web";
 /** Shared self-service account entry for standard shells and custom products. */
 export function AccountSettings({ client, username, onUpdated }) {

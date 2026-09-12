@@ -15,7 +15,7 @@ Internet -> HTTPS reverse proxy -> 127.0.0.1:8080 Media Backup
 
 ## 2. 构建与验证发行归档
 
-维护者从干净的 `0.3.2` checkout 构建：
+维护者从干净的 `0.3.3` checkout 构建：
 
 ```bash
 revision="$(git rev-parse HEAD)"
@@ -25,7 +25,7 @@ mkdir -p "$PWD/dist"
 ./scripts/build-server-release.sh \
   "$PWD/target/x86_64-unknown-linux-gnu/release/media-backup-server" \
   "$revision" "$PWD/dist"
-./scripts/test-deployment.sh "$PWD/dist/media-backup-server-0.3.2-x86_64-unknown-linux-gnu.tar.gz"
+./scripts/test-deployment.sh "$PWD/dist/media-backup-server-0.3.3-x86_64-unknown-linux-gnu.tar.gz"
 ```
 
 Cargo release build script 拒绝其他 target；归档脚本还会核对构建主机为 Linux x86_64，并直接检查输入
@@ -36,18 +36,18 @@ revision、target、`v2` 移动 API、`plain-v1`、Schema、移动 FFI、Web 与
 ## 3. 安装
 
 ```bash
-grep ' media-backup-server-0.3.2-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
+grep ' media-backup-server-0.3.3-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
   | sha256sum --check -
-tar -xzf media-backup-server-0.3.2-x86_64-unknown-linux-gnu.tar.gz
-cd media-backup-server-0.3.2-x86_64-unknown-linux-gnu
+tar -xzf media-backup-server-0.3.3-x86_64-unknown-linux-gnu.tar.gz
+cd media-backup-server-0.3.3-x86_64-unknown-linux-gnu
 ./bin/media-backup-server release-identity
 ./bin/media-backup-server release-verify "$PWD"
 sudo ./scripts/setup-wsl.sh
 sudoedit /etc/isarmg/media-backup.env
-sudo /opt/isarmg/media-backup/releases/0.3.2/scripts/start-server-wsl.sh
+sudo /opt/isarmg/media-backup/releases/0.3.3/scripts/start-server-wsl.sh
 ```
 
-安装只允许创建缺失的 `/opt/isarmg/media-backup/releases/0.3.2`，不会覆盖或复用。同版本重装应先按
+安装只允许创建缺失的 `/opt/isarmg/media-backup/releases/0.3.3`，不会覆盖或复用。同版本重装应先按
 运维变更流程处理现有部署，而不是绕过 no-clobber。环境文件首次以 `0600` 排他创建；替换自动生成的
 `BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`、`METRICS_TOKEN` 并删除初始化标记后才能启动。登录候选 username
 必须是 1–64 bytes 的可打印 ASCII；Foundation 会去除首尾 ASCII whitespace、转为 ASCII 小写，再要求
@@ -97,7 +97,7 @@ media.example.com {
 ```bash
 curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
-sudo /opt/isarmg/media-backup/releases/0.3.2/scripts/run-server-wsl.sh
+sudo /opt/isarmg/media-backup/releases/0.3.3/scripts/run-server-wsl.sh
 ```
 
 启动脚本先检查 `uname`，二进制的 `serve-release` 再通过内核 `uname(2)` 检查 Linux x86_64，systemd 单元
@@ -125,7 +125,7 @@ blob rooted unlink/删行及 orphan commit staging 清理。永久删除响应 2
 
 ## 6. 当前数据库合同
 
-服务端 `product_metadata` 必须精确为 `application=media-backup`、`application_version=0.3.2`、
+服务端 `product_metadata` 必须精确为 `application=media-backup`、`application_version=0.3.3`、
 `schema_revision=2`，Schema SHA-256 为
 `6415edde88228d508f1c0c7582f119c8fe869d2d78fd85129f359a5d748cbbc2`。移动队列对应
 `media-backup-client` 与 SHA-256
@@ -180,19 +180,19 @@ MEDIA_BACKUP_SOURCE_REVISION="$(git rev-parse HEAD)" \
 
 门禁直接调用 Foundation `assertSarmgWebToolchain`，验证精确工具链及依赖/lockfile，并拒绝产品自有
 登录外壳、存储凭据及私有字体/token 定义。管理页面使用共享 Shell/UI、认证客户端和 Maple 字体。
-Vite 生成 HTML、JS、CSS、正体/斜体 WOFF2 与 OFL 许可证六个资产；服务端的唯一内嵌资产清单同时用于
+Vite 生成 HTML、JS、CSS、两个首屏 WOFF2、按需 CJK 分片与字体许可证；服务端的唯一内嵌资产清单同时用于
 HTTP 响应和发行身份校验，发行包 `share/web/` 必须包含相同字节。字体经同源 `/admin/assets/` 路由
 提供，类型为 `font/woff2`，不访问 CDN。必须先构建 Web，再构建 Server。
 
-备份用户是设备上传业务账户，管理接口为 `/api/v2/admin/users`，不等同于平台管理员。
-平台管理员面板使用 Foundation `/api/v2/platform/administrators`。备份账户资料保存和密码重设是
+备份用户是设备上传业务账户，管理接口为 `/api/v2/admin/users`，不等同于平台管理员。产品页面不展示或
+请求平台管理员列表；当前管理员只能从右上角人物图标进入 Foundation 账户设置。备份账户资料保存和密码重设是
 两个独立操作，停用需显式确认；写请求失败不会自动重放，密码会清空，界面仅显示安全错误和 Request ID。
 
 `npm run test:browser --prefix web` 对实际 dist 运行 Chromium/Firefox 验收，覆盖账户操作、
-失败重试、两个管理员域的隔离、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
+失败重试、业务账户与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 Foundation `=0.7.0` / `77e7ad7af8e1bf62432bd6bdd8fa9aff54cb39d1`；八个 Web 包使用
+当前 Server Rust 固定 Foundation `=0.7.5` / `80c49f2f811d8d47dbbcdb6c9521924de7d3184e`；八个 Web 包使用
 同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。独立 CI 已通过，含 Server archive、
 Android 编译及未签名 iOS 验证，见[消费者证据](https://github.com/isarmg/sarmg-foundation-server/blob/main/consumers/axum-0.7.0-evidence.md)。
 这不代表这些主分支改动已重新发布为移动端或 Server 制品，也不代替原生签名和目标运行验收。

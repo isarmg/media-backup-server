@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Request, State},
-    http::{header, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::Next,
     response::{Html, IntoResponse, Response},
     Json,
@@ -313,14 +313,22 @@ pub(crate) async fn page() -> Response {
     response
 }
 
-pub(crate) async fn script() -> Response {
-    static_asset_response(crate::web_assets::SCRIPT, "text/javascript; charset=utf-8")
+pub(crate) async fn script(headers: HeaderMap) -> Response {
+    static_asset_response(
+        crate::web_assets::SCRIPT,
+        "text/javascript; charset=utf-8",
+        &headers,
+    )
 }
-pub(crate) async fn styles() -> Response {
-    static_asset_response(crate::web_assets::STYLES, "text/css; charset=utf-8")
+pub(crate) async fn styles(headers: HeaderMap) -> Response {
+    static_asset_response(
+        crate::web_assets::STYLES,
+        "text/css; charset=utf-8",
+        &headers,
+    )
 }
 
-pub(crate) async fn font_asset(Path(name): Path<String>) -> Response {
+pub(crate) async fn font_asset(headers: HeaderMap, Path(name): Path<String>) -> Response {
     let path = format!("share/web/assets/{name}");
     let Some((_, contents)) = crate::web_assets::RELEASE_FILES
         .iter()
@@ -335,17 +343,35 @@ pub(crate) async fn font_asset(Path(name): Path<String>) -> Response {
     } else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    static_asset_response(contents, content_type)
+    static_asset_response(contents, content_type, &headers)
 }
 
-fn static_asset_response(contents: &'static [u8], content_type: &'static str) -> Response {
-    let mut response = contents.into_response();
+fn static_asset_response(
+    contents: &'static [u8],
+    content_type: &'static str,
+    request_headers: &HeaderMap,
+) -> Response {
+    let etag = format!("\"{}\"", blake3::hash(contents).to_hex());
+    let not_modified = request_headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.split(',').any(|candidate| candidate.trim() == etag));
+    let mut response = if not_modified {
+        StatusCode::NOT_MODIFIED.into_response()
+    } else {
+        contents.into_response()
+    };
     response
         .headers_mut()
         .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
-    response
-        .headers_mut()
-        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("public, no-cache"),
+    );
+    response.headers_mut().insert(
+        header::ETAG,
+        HeaderValue::from_str(&etag).expect("BLAKE3 ETag is valid ASCII"),
+    );
     response.headers_mut().insert(
         header::X_CONTENT_TYPE_OPTIONS,
         HeaderValue::from_static("nosniff"),
@@ -373,7 +399,7 @@ mod tests {
                 continue;
             }
             let name = path.strip_prefix("share/web/assets/").unwrap();
-            let response = font_asset(Path(name.to_owned())).await;
+            let response = font_asset(HeaderMap::new(), Path(name.to_owned())).await;
             let content_type = if path.ends_with(".woff2") {
                 "font/woff2"
             } else {
@@ -381,6 +407,11 @@ mod tests {
             };
             assert_eq!(response.status(), StatusCode::OK);
             assert_eq!(response.headers()[header::CONTENT_TYPE], content_type);
+            assert_eq!(
+                response.headers()[header::CACHE_CONTROL],
+                "public, no-cache"
+            );
+            assert!(response.headers().contains_key(header::ETAG));
             assert_eq!(
                 response.headers()[header::X_CONTENT_TYPE_OPTIONS],
                 "nosniff"
@@ -404,10 +435,27 @@ mod tests {
             "admin.js",
         ] {
             assert_eq!(
-                font_asset(Path(name.to_owned())).await.status(),
+                font_asset(HeaderMap::new(), Path(name.to_owned()))
+                    .await
+                    .status(),
                 StatusCode::NOT_FOUND
             );
         }
+    }
+
+    #[tokio::test]
+    async fn embedded_assets_revalidate_without_retransmitting_the_body() {
+        let initial =
+            static_asset_response(crate::web_assets::STYLES, "text/css", &HeaderMap::new());
+        let etag = initial.headers()[header::ETAG].clone();
+        let mut headers = HeaderMap::new();
+        headers.insert(header::IF_NONE_MATCH, etag);
+        let cached = static_asset_response(crate::web_assets::STYLES, "text/css", &headers);
+        assert_eq!(cached.status(), StatusCode::NOT_MODIFIED);
+        assert!(axum::body::to_bytes(cached.into_body(), 1)
+            .await
+            .unwrap()
+            .is_empty());
     }
 
     #[tokio::test]

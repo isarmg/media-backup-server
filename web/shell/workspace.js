@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { t } from "./i18n.js";
+import { t } from "@sarmg/admin-ui/i18n";
 import { createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import { Button, IconButton, TextField } from "@sarmg/admin-ui";

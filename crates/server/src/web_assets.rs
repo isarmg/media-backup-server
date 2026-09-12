@@ -9,6 +9,14 @@ pub(crate) const RELEASE_FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../../web/dist/assets/CJK-LICENSE.txt"),
     ),
     (
+        "share/web/assets/MapleMonoBootstrap-Regular.woff2",
+        include_bytes!("../../../web/dist/assets/MapleMonoBootstrap-Regular.woff2"),
+    ),
+    (
+        "share/web/assets/MapleMonoBootstrap-Bold.woff2",
+        include_bytes!("../../../web/dist/assets/MapleMonoBootstrap-Bold.woff2"),
+    ),
+    (
         "share/web/assets/MapleMonoNormalNL-Regular.woff2",
         include_bytes!("../../../web/dist/assets/MapleMonoNormalNL-Regular.woff2"),
     ),

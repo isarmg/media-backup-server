@@ -3,8 +3,8 @@ set -euo pipefail
 
 release_tag="${1:-${GITHUB_REF_NAME:-}}"
 
-if [[ "$release_tag" != "v0.3.2" ]]; then
-  echo "This release workflow only accepts the immutable Media Backup v0.3.2 tag (received: ${release_tag:-<empty>})." >&2
+if [[ "$release_tag" != "v0.3.3" ]]; then
+  echo "This release workflow only accepts the immutable Media Backup v0.3.3 tag (received: ${release_tag:-<empty>})." >&2
   exit 1
 fi
 

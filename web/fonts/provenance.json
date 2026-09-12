@@ -3,7 +3,7 @@
   "source_commit": "c08fda97fef73d68c1755219852150770f6e6578",
   "source_version": "v7.9-43-gc08fda97",
   "assets": {
-    "fonts.css": "13d1619cdf0255d2732af5d12effdf2755acda6fb12f842b45df6fef1e14c0bb",
+    "fonts.css": "38cb27193474c79e5f6df4188f34a81beae52171f5ec2feb58527dd516fded97",
     "OFL.txt": "eb2d28d2e565a0757e3d64e34ebb452e75a0cad87c0ab3faf4e08ba7596de902",
     "CJK-LICENSE.txt": "eb2d28d2e565a0757e3d64e34ebb452e75a0cad87c0ab3faf4e08ba7596de902",
     "cjk/MapleMonoNL-CN-Regular-4D4-50CE.woff2": "4d55fc5b0e218a36300b842845f153509d707446f71be2024dca7364bc0c36e5",
@@ -90,7 +90,9 @@
     "cjk/MapleMonoNL-CN-Bold-9E68-FFEE.woff2": "9a7daad76ef4ffd48da63274e94ca708d9433d294833d9c025f1825d2d31e29e",
     "MapleMonoNormalNL-Regular.woff2": "3aa0ddc85204abbd765ab231e61c40d123b0b5bde103dc3987ee6f2168898260",
     "MapleMonoNormalNL-Bold.woff2": "f920a19a0cecff19b1f2c0171a1c0618131e9b23825fb0f3c01076270d40f7c6",
-    "NORMAL-LICENSE.txt": "eb2d28d2e565a0757e3d64e34ebb452e75a0cad87c0ab3faf4e08ba7596de902"
+    "NORMAL-LICENSE.txt": "eb2d28d2e565a0757e3d64e34ebb452e75a0cad87c0ab3faf4e08ba7596de902",
+    "MapleMonoBootstrap-Regular.woff2": "489b991d495bbedae4afb1e9b9bee278eae2e58367e89a630d2b23e9059af5e4",
+    "MapleMonoBootstrap-Bold.woff2": "acae781465136487e92635d5d88c4c4e1a24a7358cb25652078eaa92d3331512"
   },
   "cjk": {
     "upstream": "https://github.com/subframe7536/maple-font/releases/tag/v7.9",
@@ -113,5 +115,19 @@
     "url": "https://github.com/subframe7536/maple-font/releases/download/v7.9/MapleMonoNormalNL-Woff2.zip",
     "sha256": "6fd6c8668657d4b55f108a115e59fa7a081757f29f599ebfc30a8558b85725bf"
   },
-  "distribution": "Reviewed Server Foundation font source snapshot; published npm dependencies remain unchanged"
+  "bootstrap": {
+    "family": "Sarmg Maple Bootstrap",
+    "glyphs_sha256": "3b6412cde560e2f91f01e23c25326315b6fd7283e05027ee72f3b7c76a8a7b2e",
+    "ui_codepoints": 512,
+    "faces": {
+      "MapleMonoBootstrap-Regular.woff2": {
+        "bytes": 165456,
+        "codepoints": 1947
+      },
+      "MapleMonoBootstrap-Bold.woff2": {
+        "bytes": 170544,
+        "codepoints": 1947
+      }
+    }
+  }
 }
