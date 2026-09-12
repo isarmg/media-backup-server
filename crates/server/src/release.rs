@@ -14,14 +14,14 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
 const MANIFEST_VERSION: u32 = 1;
 const PRODUCT: &str = "media-backup-server";
-const VERSION: &str = "0.3.3";
+const VERSION: &str = "0.3.4";
 const TARGET: &str = sarmg_server_target::SERVER_TARGET_TRIPLE;
 const API_VERSION: &str = media_backup_protocol::API_VERSION;
 const STORAGE_ENCODING: &str = "plain-v1";
 const MANIFEST_FILENAME: &str = "release-manifest.json";
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
-pub(crate) const PRODUCTION_RELEASE_ROOT: &str = "/opt/isarmg/media-backup/releases/0.3.3";
-const RELOCATABLE_RELEASE_SUFFIX: &str = "opt/isarmg/media-backup/releases/0.3.3";
+pub(crate) const PRODUCTION_RELEASE_ROOT: &str = "/opt/isarmg/media-backup/releases/0.3.4";
+const RELOCATABLE_RELEASE_SUFFIX: &str = "opt/isarmg/media-backup/releases/0.3.4";
 
 const EXPECTED_DIRECTORIES: &[&str] = &[
     "bin",
@@ -181,7 +181,7 @@ fn validate_runtime_root(root: &Path) -> Result<PathBuf> {
     );
     ensure!(
         canonical.ends_with(RELOCATABLE_RELEASE_SUFFIX),
-        "RELEASE_ROOT must end in the fixed Media Backup 0.3.3 physical release path"
+        "RELEASE_ROOT must end in the fixed Media Backup 0.3.4 physical release path"
     );
     Ok(canonical)
 }
@@ -697,7 +697,7 @@ mod tests {
         );
         assert_eq!(
             identity.release_contract_sha256,
-            "520b41f239160ba17fd7eef0346e90ef7a93eed95fb6d2a493290776d23f51dd"
+            "9ec4b443cff26e83721af588f09cc7860615f909076efcae51eaffbc95a6fce4"
         );
     }
 
@@ -731,7 +731,7 @@ mod tests {
         assert!(is_source_revision(
             "0123456789abcdef0123456789abcdef01234567"
         ));
-        assert!(!is_source_revision("v0.3.3"));
+        assert!(!is_source_revision("v0.3.4"));
         assert!(is_lower_sha256(&"a".repeat(64)));
         assert!(!is_lower_sha256(&"A".repeat(64)));
     }

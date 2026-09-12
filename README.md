@@ -1,10 +1,10 @@
 # Media Backup 照片与视频备份
 
-本仓库为 Media Backup Server `0.3.3` 开发版，仅包含 Rust 服务端、协议和管理 Web。
+本仓库为 Media Backup Server `0.3.4` 开发版，仅包含 Rust 服务端、协议和管理 Web。
 Android/iOS 客户端、共享队列核心和 FFI 位于独立的 [Client 仓库](https://github.com/isarmg/media-backup-client)。移动端通过 HTTPS 上传设备原始媒体和设备生成的缩略图；服务端使用
 SQLite 保存账户、图库组织和同步状态，并以 `plain-v1` 保存与设备原文件一致的未加密字节。
 
-本项目只实现当前版本。服务端继续创建并接受 Media Backup `0.3.0` 数据格式（Schema revision 2），软件版本 `0.3.3` 不改变该数据格式；移动端状态合同由 Client 仓库规定。
+本项目只实现当前版本。服务端继续创建并接受 Media Backup `0.3.0` 数据格式（Schema revision 2），软件版本 `0.3.4` 不改变该数据格式；移动端状态合同由 Client 仓库规定。
 不属于当前身份的数据库和凭据一律拒绝，产品仓库也不提供
 迁移、备份和恢复命令。这些离线任务统一由独立的 `sarmg-upgrade` 项目负责。
 
