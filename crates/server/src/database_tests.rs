@@ -7,6 +7,7 @@ use axum::{
     Router,
 };
 use serde_json::{json, Value};
+use sha2::Digest;
 use sqlx::SqlitePool;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -127,6 +128,7 @@ async fn test_state(database: &Path, data: &Path) -> (AppState, SqlitePool) {
         require_https: false,
         development: true,
         trusted_proxy_cidrs: Vec::new(),
+        credentials_key: [7; 32],
     };
     let state = crate::build_state(&config, pool.clone(), storage)
         .await
@@ -516,7 +518,6 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                 "/api/v2/admin/users",
                 json!({
                     "username": format!("invalid-path-{index}"),
-                    "password": PASSWORD,
                     "display_name": "Invalid Storage Path",
                     "storage_path": invalid_storage_path,
                     "quota_bytes": 1,
@@ -538,7 +539,6 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                 "/api/v2/admin/users",
                 json!({
                     "username": USERNAME,
-                    "password": PASSWORD,
                     "display_name": "Media Owner",
                     "storage_path": "",
                     "quota_bytes": 10_000_000,
@@ -566,7 +566,6 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
             "/api/v2/admin/users",
             json!({
                 "username": "nested-storage-owner",
-                "password": PASSWORD,
                 "display_name": "Nested Storage Owner",
                 "storage_path": format!("{storage_path}/nested"),
                 "quota_bytes": 1,
@@ -586,7 +585,6 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
             "/api/v2/admin/users",
             json!({
                 "username": USERNAME,
-                "password": PASSWORD,
                 "display_name": "Duplicate",
                 "storage_path": "blobs/duplicate",
                 "quota_bytes": 1,
@@ -617,6 +615,21 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
     )
     .await;
 
+    let created_instance = json_body(
+        send(
+            &app,
+            json_request(
+                Method::POST,
+                format!("/api/v2/admin/users/{account_id}/instances"),
+                json!({"name": "Test Phone"}),
+                None,
+                Some((&admin_cookie, &admin_csrf)),
+            ),
+            StatusCode::OK,
+        )
+        .await,
+    )
+    .await;
     let bootstrap = json_body(
         send(
             &app,
@@ -624,8 +637,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                 Method::POST,
                 "/v2/auth/bootstrap",
                 json!({
-                    "username": USERNAME,
-                    "password": PASSWORD,
+                    "authorization_code": created_instance["authorization_code"],
                     "device_name": "Test Phone",
                     "platform": "test"
                 }),
@@ -1184,11 +1196,17 @@ async fn seed_account(pool: &SqlitePool, storage_path: &str, suffix: &str) -> (U
     .await
     .expect("insert commit test account");
     let device_id = Uuid::new_v4();
+    let authorization_code = format!("test-authorization-code-{suffix}-01234567890123456789");
+    let authorization_hash = sha2::Sha256::digest(authorization_code.as_bytes()).to_vec();
+    let authorization_encrypted = crate::crypto::SecretBox::new(&[7; 32])
+        .encrypt_client_authorization(&device_id.to_string(), &authorization_code)
+        .expect("encrypt commit test authorization code");
     sqlx::query(
         r#"
         INSERT INTO devices(
-            id, account_id, name, platform, token_hash, created_at, last_seen_at
-        ) VALUES (?, ?, ?, 'test', ?, datetime('now'), datetime('now'))
+            id, account_id, name, platform, token_hash, authorization_code_hash,
+            authorization_code_enc, pairing_status, created_at, last_seen_at
+        ) VALUES (?, ?, ?, 'test', ?, ?, ?, 'paired', datetime('now'), datetime('now'))
         "#,
     )
     .bind(device_id)
@@ -1199,6 +1217,8 @@ async fn seed_account(pool: &SqlitePool, storage_path: &str, suffix: &str) -> (U
             .as_bytes()
             .to_vec(),
     )
+    .bind(authorization_hash)
+    .bind(authorization_encrypted)
     .execute(pool)
     .await
     .expect("insert commit test device");

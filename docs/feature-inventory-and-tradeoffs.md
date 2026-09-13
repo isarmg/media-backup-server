@@ -27,8 +27,8 @@
 ### 1.3 两类“用户”和两类 `role`
 
 控制面只有 Administrator。`_sarmg_administrators` 表不保存 `role`，Administrator Session 的 `role:"admin"` 是
-Foundation wire 常量；其身份键是 `_sarmg_administrators.username`。`accounts` 是照片/视频归属和设备登录的数据面
-账户，不是低权限管理员。两种 username 即使文字相同也不会关联。上传
+Foundation wire 常量；其身份键是 `_sarmg_administrators.username`。`accounts` 只是照片/视频归属的数据面
+租户，不是低权限管理员，也不是客户端登录身份。管理员 username 即使与租户名称文字相同也不会关联。上传
 `resources.role` 表示同一资产内的资源用途，例如 `primary` 或 `thumbnail`，也不是权限角色。删除或改名
 任一概念时必须保持这三个命名空间彼此独立。
 
@@ -70,7 +70,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-A-012 | 写管理请求要求单个 CSRF、同源 Origin 与单一 Host/URI authority | Foundation Axum Adapter | 保障 | 高 | 禁止跨站和重复头歧义 | 共享 Axum/Hyper 套件 |
 | MED-A-013 | 生产 Cookie 为 __Host-sarmg-media-backup-session，Secure/HttpOnly/SameSite=Strict/Path=/ | Foundation session_set_cookie | 保障 | 低 | 不提供产品 Cookie 别名 | 精确属性与 loopback 开发模式 |
 | MED-A-015 | 数据面 accounts 与管理面 _sarmg_administrators 完全分离 | 产品移动授权、Foundation 管理授权 | 核心 | 高 | 同名账户不共享凭据或权限 | 移动 /v2 与管理 /api/v2 分域 |
-| MED-A-016 | device bootstrap 校验账户密码并创建随机 Bearer token；Server 只存 token hash | `routes::bootstrap`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；明文库泄漏扩大 | 正误密码、disabled account、token digest、设备 audit |
+| MED-A-016 | 管理员为每个实例创建一个长期授权码；Server 保存经实例 ID 绑定的信封密文和独立摘要。bootstrap 只接受待配对实例的授权码并签发随机 Bearer token；轮换立即清除旧 token | `routes::bootstrap`、`admin.rs`、`crypto.rs`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；明文库泄漏扩大 | 正误授权码、取消/删除、轮换、disabled account、token digest、设备 audit |
 | MED-A-017 | 移动业务 API 接受 device token 或未撤销 API Key，解析到同一 account/device context | `auth::require_auth` | 核心 | 高 | 无法授权上传，或两个 token 类型产生不同隔离语义 | device/API key、revoked、disabled、跨账户 |
 | MED-A-018 | API Key 原值只在创建响应出现一次，库中存 hash/prefix，可列出和撤销 | `api_access.rs`、`api_keys` | 建议保留 | 高 | 自动化/额外客户端只能保存设备 token；明文保存会泄漏 | 创建、列表不含 token、撤销、last_used |
 | MED-A-019 | `/metrics` 使用与其他身份分离的可选 Bearer `METRICS_TOKEN` | `metrics.rs`、Config | 保障 | 中 | 聚合容量可被公开，或监控被迫保存 Administrator Cookie | 无/错/对 token；空配置语义 |
@@ -147,9 +147,9 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-D-001 | Jetpack Compose 提供 Server/账号、备份范围、自动条件、进度和远端库 UI | `MainActivity.kt` | 建议保留 | 高 | 后台引擎仍在但普通用户无法配置和观察 | 首次空态、保存、旋转、错误/进度 |
-| MED-D-002 | EncryptedSharedPreferences 使用 AES256-SIV key 与 AES256-GCM value 保存 endpoint、密码和 token | `SecureConfig.kt` | 保障 | 高 | 普通 preferences/备份中可能泄漏凭据 | 重启、清除、Keystore 失败、数据不可明文搜索 |
-| MED-D-003 | endpoint、username 或 password 改变时立即删除现有 bearer token | `SecureConfig` setters | 保障 | 中 | 新身份可能继续带旧设备 Token 请求 | 三字段各自变化/不变、token 清除 |
+| MED-D-001 | Jetpack Compose 提供 Server/实例授权码、备份范围、自动条件、进度和远端库 UI | `MainActivity.kt` | 建议保留 | 高 | 后台引擎仍在但普通用户无法配置和观察 | 首次空态、保存、旋转、错误/进度 |
+| MED-D-002 | EncryptedSharedPreferences 使用 AES256-SIV key 与 AES256-GCM value 保存 endpoint、实例授权码和 token | `SecureConfig.kt` | 保障 | 高 | 普通 preferences/备份中可能泄漏凭据 | 重启、清除、Keystore 失败、数据不可明文搜索 |
+| MED-D-003 | endpoint 或实例授权码改变时立即删除现有 bearer token | `SecureConfig` setters | 保障 | 中 | 新实例可能继续带旧设备 Token 请求 | 两字段各自变化/不变、token 清除 |
 | MED-D-004 | 支持照片/视频开关、camera-only 或显式相册选择 | `ScanOptions`、`DeviceAlbums`、Compose | 核心 | 中 | 无法控制备份范围或会扫描全部授权库 | 空选择、首次默认、照片/视频组合、相册删除 |
 | MED-D-005 | Android 13/14 区分 image/video/selected media 权限，低版本使用 READ_EXTERNAL_STORAGE | `BackupWorker::hasMediaAccess`、Manifest | 保障 | 高 | 部分系统无权扫描或错误宣称拥有全部媒体 | API levels、partial access、拒绝后 UI |
 | MED-D-006 | MediaStore 扫描按修改状态入 Client，并导出原始资源和设备缩略图 | `MediaScanner.kt` | 核心 | 高 | Android 无媒体输入或无快速预览资源 | photo/video、损坏 URI、文件名/MIME、thumbnail |
@@ -169,7 +169,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
 | MED-I-001 | SwiftUI 提供配置、相册选择、备份进度、时间线、整理和恢复 UI | `ContentView.swift`、`BackupCoordinator` | 建议保留 | 高 | Rust Client/网络层仍在但没有可用产品入口 | 首次配置、permission、loading/error、空图库 |
-| MED-I-002 | username/password/token 使用 Keychain；普通 UserDefaults 只保存 endpoint/偏好/cursor | `KeychainStore.swift`、`BackupCoordinator` | 保障 | 高 | Secret 进入普通偏好/设备备份，或偏好丢失导致体验下降 | 存取/覆盖/删除、重启、Keychain error |
+| MED-I-002 | 实例授权码/token 使用 Keychain；普通 UserDefaults 只保存 endpoint/偏好/cursor | `KeychainStore.swift`、`BackupCoordinator` | 保障 | 高 | Secret 进入普通偏好/设备备份，或偏好丢失导致体验下降 | 存取/覆盖/删除、重启、Keychain error |
 | MED-I-003 | PhotoKit 请求 read-write 权限；authorized 与 limited 都进入当前扫描流程 | `PhotoScanner::requestAccess` | 保障 | 高 | 无法扫描或越过用户授权预期 | authorized/limited/denied/restricted；UI 可见集合不是完整库证明 |
 | MED-I-004 | PhotoKit 枚举当前可见相册与成员，按选定集合形成 membership | `PhotoScanner::albums/scan` | 核心 | 高 | 无法保留相册结构或控制范围 | smart/user albums、重复 asset、空 album；limited 结果当前没有“非完整”标志 |
 | MED-I-005 | PHAssetResource 原始字节允许从 iCloud 下载到临时源 | `PhotoScanner::export` | 核心 | 高 | iCloud-only 媒体无法备份 | network allowed、下载失败、取消、临时文件 |
@@ -187,9 +187,9 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
 | MED-W-001 | Foundation Shell 统一 restore/login/logout、导航、通知与诊断，Session/CSRF 只在内存；产品没有第二套登录状态机 | `createSarmgAdminApplication`、`@sarmg/admin-shell` | 保障 | 高 | 认证竞态或 Secret 持久化 | 共享 Shell 测试、消费者 Chromium/Firefox 验收 |
-| MED-W-002 | 总览与备份用户视图；管理员账号仅由 Foundation Shell 右上角人物图标设置；业务读取失败清除旧数据，安全错误显示 Request ID 和显式重试 | `Application`、`OverviewView`、`UsersView`、`AccountSettings` | 建议保留 | 中 | 账户域混淆或失败后仍显示过期状态 | 切页、失败/重试、账号设置、无内部错误泄漏 |
+| MED-W-002 | 统一实例列表、详细信息和日志视图；管理员账号仅由 Foundation Shell 右上角人物图标设置；业务读取失败清除旧数据，安全错误显示 Request ID 和显式重试 | `Application`、`OverviewView`、`UsersView`、`LogsView` | 建议保留 | 中 | 账户域混淆或失败后仍显示过期状态 | 切页、失败/重试、账号设置、无内部错误泄漏 |
 | MED-W-003 | 总览聚合 active/total user、used/pending/quota 和每用户设备/resource 数 | `/api/v2/admin/overview`、Overview guard | 建议保留 | 中 | 容量和账户状态只能手工查询 | unlimited quota、large safe integer、空库 |
-| MED-W-004 | 创建/修改备份账户，停用需确认，密码重设为独立操作；GiB 配额往返保留原始整数字节，写失败不自动重放且清空密码 | `BackupUserForm`、`BackupPasswordDialog` | 核心 | 高 | 部分成功被误报、重复写入或配额舍入丢失 | create/edit/disable/reset、取消不写、失败清密、焦点与精确 quota |
+| MED-W-004 | 创建/修改备份账户及其客户端实例，停用需确认；实例授权码可查看、轮换、取消并在终态删除；GiB 配额往返保留原始整数字节 | `BackupUserForm`、`InstanceManager` | 核心 | 高 | 部分成功被误报、重复写入或授权未真正撤销 | create/edit/disable、实例配对/轮换/删除、精确 quota |
 | MED-W-005 | 业务 JSON 在进入组件前校验必需字段与类型，路径只允许 `/api/v2/admin/*` | `web/src/api.ts` | 保障 | 中 | 漂移响应会进入组件，或产品 client 被用于移动路由 | 缺失/错误类型、错误 prefix；当前 guard 容忍响应额外字段 |
 | MED-W-006 | Foundation 统一 system/light/dark 主题；产品不读写浏览器存储 | Shell 主题选择器 | 可选 | 低 | 私有外观与平台漂移 | 移动明暗主题 WCAG AA、无横向溢出 |
 | MED-W-007 | Foundation tokens/reset/accessibility 提供 focus、reduced motion、forced colors 基线 | CSS imports、`data-sarmg-scope` | 保障 | 中 | 基础行为跨项目漂移 | keyboard、focus、high contrast、CSS digest |
@@ -202,7 +202,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 当前 Schema identity 为 media-backup 0.3.5、revision 2、SHA `6415edde88228d508f1c0c7582f119c8fe869d2d78fd85129f359a5d748cbbc2`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 当前 Schema identity 为 media-backup 0.3.5、revision 3、SHA `d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-002 | Client 当前 Schema SHA 为 `fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558` | `client-core/database.rs` | 保障 | 高 | 手机队列状态不可证明 | Rust/Kotlin/Swift epoch 与 Schema identity |
 | MED-R-003 | 两个数据库都先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | 两个 `database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |

@@ -42,9 +42,7 @@ Nginx 在可信代理边界终止 TLS。移动业务 API 只位于 `/v2`；浏�
 fallback。完整步骤见运维文档。
 
 Server 管理身份采用 Foundation 当前 `username` 合同：登录只接受 `{username,password}`，成功 Session
-恰为 `{authenticated,user_id,username,role:"admin",csrf_token}`。这一变化只属于 Server 与内置
-React/Vite 管理 Web；移动端、`accounts.username`、设备 Token/API Key、移动 Schema 和 FFI 合同保持
-原状。管理 username 与备份账户 username 即使文字相同，也属于不同表、不同凭据和不同授权域。
+恰为 `{authenticated,user_id,username,role:"admin",csrf_token}`。移动客户端不使用备份账户密码：管理员在备份账户下创建实例后，把该实例唯一的长期授权码交给 Android/iOS 配对。授权码以信封密文保存且可查看/轮换，轮换后客户端必须重新配对。这里只支持新的当前 Schema，不包含旧密码 bootstrap 或进程内迁移兼容。
 
 ## 文档
 

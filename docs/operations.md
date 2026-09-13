@@ -49,7 +49,7 @@ sudo /opt/isarmg/media-backup/releases/0.3.5/scripts/start-server-wsl.sh
 
 安装只允许创建缺失的 `/opt/isarmg/media-backup/releases/0.3.5`，不会覆盖或复用。同版本重装应先按
 运维变更流程处理现有部署，而不是绕过 no-clobber。环境文件首次以 `0600` 排他创建；替换自动生成的
-`BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`、`METRICS_TOKEN` 并删除初始化标记后才能启动。登录候选 username
+`BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`、`MEDIA_BACKUP_CREDENTIALS_KEY`、`METRICS_TOKEN` 并删除初始化标记后才能启动。登录候选 username
 必须是 1–64 bytes 的可打印 ASCII；Foundation 会去除首尾 ASCII whitespace、转为 ASCII 小写，再要求
 canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9._-]`，因此 `@`、Unicode、内部空白、
 首尾分隔符都被拒绝。持久化和 Session 只接受已经 canonical 的值；`ADMIN_EMAIL` 不是配置别名。
@@ -63,6 +63,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 | `BIND` | HTTP 监听地址 | 推荐 `127.0.0.1:8080` |
 | `BOOTSTRAP_ADMIN_USERNAME` | 无管理员时创建的初始管理员 username | 默认 admin；按 Foundation 规则规范化；已有管理员时不创建或覆盖身份 |
 | `BOOTSTRAP_ADMIN_PASSWORD` | 初始管理员密码 | 仅无管理员时必填；已有管理员时不重置密码；生产由秘密管理器生成 |
+| `MEDIA_BACKUP_CREDENTIALS_KEY` | 实例授权码信封加密主密钥 | 必填；Base64 解码后必须为 32 bytes，必须持久化并由秘密管理器保存 |
 | `REQUIRE_HTTPS` | 强制可信 HTTPS 语义 | 必须为 `true` |
 | `DEVELOPMENT` | 本机开发开关 | 生产必须为 `false` |
 | `TRUSTED_PROXY_CIDRS` | 直接可信代理地址 | 仅列真实直连代理 |
@@ -70,16 +71,13 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 
 浏览器认证合同只有三条：`POST /api/v2/auth/login`、`GET /api/v2/auth/session`、
 `POST /api/v2/auth/logout`。登录 body 精确为 `{username,password}`；登录和 session 成功体精确为
-`{authenticated:true,user_id,username,role:"admin",csrf_token}`。普通备份账户仍使用
-`accounts.username`，它与 `_sarmg_administrators.username` 是不同身份域；同名不会共享密码、Session、数据归属或
+`{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不再是客户端登录凭据；它与 `_sarmg_administrators.username` 是不同身份域。
 权限。用户管理等业务位于 `/api/v2/admin/*`，移动端仍只使用 `/v2/*`。管理员 username 规范化、严格
 当前 Argon2id、登录准入、Session/CSRF 生命周期、Cookie 和安全审计均由 Foundation 的
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
 Session 是固定平台策略，不提供产品级 TTL 配置。管理员登录来源使用真实 socket peer，不信任转发来源头。
 
-此合同调整的范围只有 Server 和编译进 Server 的 React/Vite 管理 Web。Android/iOS、Client 数据库、
-`/v2/auth/bootstrap`、备份账户 username、设备 Token 与 API Key 均保持当前移动合同，运维不得把
-`BOOTSTRAP_ADMIN_USERNAME` 写入移动客户端配置，也不得把普通账户提升或复制到 `_sarmg_administrators`。
+Android/iOS 只向 `/v2/auth/bootstrap` 提交服务器地址、实例授权码和设备信息。授权码由管理员在备份账户下创建实例时生成，服务端保存密文和独立查找摘要；更换授权码会清除旧设备 Token 并要求重新配对。旧数据库和账户密码 bootstrap 不受支持，Server 遇到旧 Schema 会拒绝启动。
 
 最小 Caddy 配置：
 
@@ -126,8 +124,8 @@ blob rooted unlink/删行及 orphan commit staging 清理。永久删除响应 2
 ## 6. 当前数据库合同
 
 服务端 `product_metadata` 必须精确为 `application=media-backup`、`application_version=0.3.5`、
-`schema_revision=2`，Schema SHA-256 为
-`6415edde88228d508f1c0c7582f119c8fe869d2d78fd85129f359a5d748cbbc2`。移动队列对应
+`schema_revision=3`，Schema SHA-256 为
+`d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e`。移动队列对应
 `media-backup-client` 与 SHA-256
 `fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558`。
 

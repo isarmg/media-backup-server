@@ -11,8 +11,7 @@ pub struct EmptyRequest {}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BootstrapRequest {
-    pub username: String,
-    pub password: String,
+    pub authorization_code: String,
     pub device_name: String,
     pub platform: String,
 }

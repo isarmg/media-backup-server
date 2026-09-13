@@ -4,7 +4,7 @@ set -euo pipefail
 readonly product="media-backup-server"
 readonly version="0.3.5"
 readonly target="x86_64-unknown-linux-gnu"
-readonly release_contract_sha256="eaad9f44077fd0923ea5b61bf26d323ffd95b13fabca3d48556184f74f625fb9"
+readonly release_contract_sha256="db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f"
 readonly service_user="isarmg-media"
 readonly service_group="isarmg-media"
 readonly app_dir="/opt/isarmg/media-backup"
@@ -160,10 +160,10 @@ expected_identity = {
     "target": "x86_64-unknown-linux-gnu",
     "api_version": "v2",
     "storage_encoding": "plain-v1",
-    "server_schema_revision": 2,
-    "server_schema_sha256": "6415edde88228d508f1c0c7582f119c8fe869d2d78fd85129f359a5d748cbbc2",
-    "web_assets_sha256": "ac6c40fd9c93127fcff2d2cf61cfc9ad79959d27f308111bfad7a2fada71f59a",
-    "release_contract_sha256": "eaad9f44077fd0923ea5b61bf26d323ffd95b13fabca3d48556184f74f625fb9",
+    "server_schema_revision": 3,
+    "server_schema_sha256": "d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e",
+    "web_assets_sha256": "d6d5c2783243a3774623c217c90ffb840727fce51435846400f6011fb1781e67",
+    "release_contract_sha256": "db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f",
 }
 expected_directories = {
     "bin", "config", "docs", "scripts", "share", "share/web",
@@ -440,6 +440,13 @@ random_hex_256() {
   printf '%s\n' "$value"
 }
 
+random_base64_256() {
+  local value
+  value="$(LC_ALL=C head -c 32 /dev/urandom | base64 | tr -d '\n')"
+  [[ "$value" =~ ^[A-Za-z0-9+/]{43}=$ ]] || die "failed to generate a Base64 256-bit secret"
+  printf '%s\n' "$value"
+}
+
 verify_release "$release_source_dir" archive
 source_revision="$verified_revision"
 
@@ -547,18 +554,20 @@ if [[ -e "$config_path" || -L "$config_path" ]]; then
   ensure_single_link_regular_file "$config_path" "configuration"
 else
   admin_password="$(random_hex_256)"
+  credentials_key="$(random_base64_256)"
   metrics_token="$(random_hex_256)"
   if (
     umask 077
     set -o noclobber
     printf '%s\n' \
       "$initial_secret_marker" \
-      '# Replace both generated secrets, then remove the marker above before first start.' \
+      '# Store all generated secrets safely, then remove the marker above before first start.' \
       'DATABASE_URL=sqlite:///var/lib/isarmg/media-backup/db/app.db' \
       'DATA_DIR=/var/lib/isarmg/media-backup/data' \
       'BIND=127.0.0.1:8080' \
       'BOOTSTRAP_ADMIN_USERNAME=admin' \
       "BOOTSTRAP_ADMIN_PASSWORD=$admin_password" \
+      "MEDIA_BACKUP_CREDENTIALS_KEY=$credentials_key" \
       'MAX_PART_BYTES=67108864' \
       'REQUIRE_HTTPS=true' \
       'DEVELOPMENT=false' \
@@ -570,7 +579,7 @@ else
   elif [[ ! -f "$config_path" || -L "$config_path" ]]; then
     die "could not create configuration without overwriting an existing path"
   fi
-  unset admin_password metrics_token
+  unset admin_password credentials_key metrics_token
   ensure_single_link_regular_file "$config_path" "configuration"
 fi
 chmod 0600 "$config_path"
@@ -598,7 +607,7 @@ if [[ "$config_created" == "1" ]]; then
 else
   printf 'Preserved existing %s without changing its contents.\n' "$config_file"
 fi
-printf 'Before first start, use sudoedit %s to replace both generated secrets and remove %s.\n' \
+printf 'Before first start, use sudoedit %s to securely record or replace all three generated secrets and remove %s.\n' \
   "$config_file" "$initial_secret_marker"
 printf 'Installed Media Backup %s from source revision %s; the service was not started.\n' \
   "$version" "$source_revision"

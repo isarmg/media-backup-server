@@ -176,7 +176,7 @@ def main() -> None:
         "target": "x86_64-unknown-linux-gnu",
         "api_version": "v2",
         "storage_encoding": "plain-v1",
-        "server_schema_revision": 2,
+        "server_schema_revision": 3,
     }
     for field, expected in fixed_identity.items():
         if identity.get(field) != expected:

@@ -158,7 +158,7 @@ sudo ./scripts/setup-wsl.sh
 # INITIAL-SECRETS-MUST-BE-REPLACED
 ```
 
-在首次启动前必须用 `sudoedit` 替换两个初始秘密，并删除这行 marker：
+在首次启动前必须用 `sudoedit` 安全记录或替换三个初始秘密，并删除这行 marker：
 
 ```bash
 sudoedit /etc/isarmg/media-backup.env
@@ -176,6 +176,7 @@ sudoedit /etc/isarmg/media-backup.env
 | `BIND` | `127.0.0.1:8080` | 推荐仅监听 loopback，由反向代理对外提供 TLS |
 | `BOOTSTRAP_ADMIN_USERNAME` | `admin` | 仅在没有管理员时创建初始身份；已有身份不被覆盖 |
 | `BOOTSTRAP_ADMIN_PASSWORD` | 安装时随机生成 | 仅初始化时必填；已有管理员时不会重置其密码 |
+| `MEDIA_BACKUP_CREDENTIALS_KEY` | 32 bytes 随机值的 Base64 | 必填且必须持久化；用于实例授权码信封加密，不得与其他 Token/密码复用 |
 | `MAX_PART_BYTES` | `67108864` | 单上传分块上限；同时影响请求 body 上限和内存/并发压力 |
 | `UPLOAD_GLOBAL_CONCURRENCY` | 未配置时 `16` | 正整数；限制全局并行上传处理 |
 | `UPLOAD_PER_ACCOUNT_CONCURRENCY` | 未配置时 `4` | 正整数且不得大于全局值 |
@@ -298,7 +299,8 @@ MEDIA_BACKUP_VERIFY_FORWARDED_PROTO='https' \
 - `GET /api/v2/auth/session`
 - `POST /api/v2/auth/logout`
 
-移动端 API 位于 `/v2/*`，普通备份账户和管理员不是同一个身份域。
+移动端 API 位于 `/v2/*`。备份账户只是媒体归属租户；每个客户端实例使用管理员生成的独立授权码配对，
+成功后获得设备 Bearer Token。更换授权码会撤销旧 Token 并要求重新配对，不接受旧的账户密码 bootstrap。
 
 ## 10. 日常运维
 
@@ -379,8 +381,9 @@ Media Backup Server 发行包不执行备份、恢复、Schema 迁移、跨版�
 
 ### 12.3 启动脚本要求替换初始秘密
 
-编辑 `/etc/isarmg/media-backup.env`，为 `BOOTSTRAP_ADMIN_PASSWORD` 和 `METRICS_TOKEN` 写入两个不同的长随机
-秘密，并删除精确 marker 行。保持文件 root 所有、`0600`、普通文件且只有一个硬链接。
+编辑 `/etc/isarmg/media-backup.env`，妥善保存安装器生成的 `BOOTSTRAP_ADMIN_PASSWORD`、
+`MEDIA_BACKUP_CREDENTIALS_KEY` 和 `METRICS_TOKEN`，确认三者属于不同用途后删除精确 marker 行。保持文件 root 所有、
+`0600`、普通文件且只有一个硬链接。后续不得丢失或随意更换授权码主密钥，否则已保存的实例授权码无法解密。
 
 ### 12.4 服务启动后立即退出
 
@@ -437,7 +440,7 @@ Media Backup Server 发行包不执行备份、恢复、Schema 迁移、跨版�
 - [ ] 安装目标此前为空，没有通过覆盖、软链接或手工复制规避 no-clobber。
 - [ ] 发行位于固定 `/opt/isarmg/media-backup/releases/0.3.5`，未被在线编辑。
 - [ ] 配置位于 `/etc/isarmg/media-backup.env`，root 所有、`0600`、单硬链接。
-- [ ] 两个初始秘密已独立替换，初始化 marker 已删除。
+- [ ] 三个初始秘密已按不同用途安全保存或替换，初始化 marker 已删除。
 - [ ] Server 只监听受控地址，公网只能通过可信 TLS 反向代理访问。
 - [ ] `TRUSTED_PROXY_CIDRS` 只包含真实直连代理。
 - [ ] systemd 服务以 `isarmg-media` 运行，unit 与发行内容一致。

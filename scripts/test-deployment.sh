@@ -4,7 +4,7 @@ set -euo pipefail
 readonly archive_arg="${1:-${MEDIA_BACKUP_RELEASE_ARCHIVE:-}}"
 readonly package="media-backup-server-0.3.5-x86_64-unknown-linux-gnu"
 readonly version="0.3.5"
-readonly contract="eaad9f44077fd0923ea5b61bf26d323ffd95b13fabca3d48556184f74f625fb9"
+readonly contract="db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f"
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly project_dir
 
@@ -79,9 +79,10 @@ assert re.fullmatch(r"[0-9a-f]{40}", identity["source_revision"])
 assert identity["target"] == "x86_64-unknown-linux-gnu"
 assert identity["api_version"] == "v2"
 assert identity["storage_encoding"] == "plain-v1"
-assert identity["server_schema_revision"] == 2
-assert identity["server_schema_sha256"] == "6415edde88228d508f1c0c7582f119c8fe869d2d78fd85129f359a5d748cbbc2"
-assert identity["release_contract_sha256"] == "eaad9f44077fd0923ea5b61bf26d323ffd95b13fabca3d48556184f74f625fb9"
+assert identity["server_schema_revision"] == 3
+assert identity["server_schema_sha256"] == "d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e"
+assert identity["web_assets_sha256"] == "d6d5c2783243a3774623c217c90ffb840727fce51435846400f6011fb1781e67"
+assert identity["release_contract_sha256"] == "db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f"
 PY
 source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
 verification="$($real_binary release-verify "$release_root")"
@@ -137,6 +138,7 @@ expect_start_rejected() {
       BIND=127.0.0.1:0 \
       BOOTSTRAP_ADMIN_USERNAME=admin \
       BOOTSTRAP_ADMIN_PASSWORD=deployment-rejection-password \
+      MEDIA_BACKUP_CREDENTIALS_KEY=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc= \
       REQUIRE_HTTPS=false \
       DEVELOPMENT=true \
       TRUSTED_PROXY_CIDRS= \
@@ -203,6 +205,7 @@ smoke_port="$((20000 + BASHPID % 30000))"
     BIND="127.0.0.1:$smoke_port" \
     BOOTSTRAP_ADMIN_USERNAME=admin \
     BOOTSTRAP_ADMIN_PASSWORD=deployment-smoke-password \
+    MEDIA_BACKUP_CREDENTIALS_KEY=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc= \
     REQUIRE_HTTPS=false \
     DEVELOPMENT=true \
     TRUSTED_PROXY_CIDRS= \
@@ -418,11 +421,13 @@ grep -Fqx 'DATA_DIR=/var/lib/isarmg/media-backup/data' "$config" || fail "data p
   -d "$install_root/var/lib/isarmg/media-backup/data" ]] || fail "separate database/data directories are missing"
 
 admin_secret="$(awk -F= '/^BOOTSTRAP_ADMIN_PASSWORD=/ { print $2 }' "$config")"
+credentials_secret="$(awk -F= '/^MEDIA_BACKUP_CREDENTIALS_KEY=/ { print $2 }' "$config")"
 metrics_secret="$(awk -F= '/^METRICS_TOKEN=/ { print $2 }' "$config")"
 [[ "$admin_secret" =~ ^[[:xdigit:]]{64}$ && "$metrics_secret" =~ ^[[:xdigit:]]{64}$ ]] ||
   fail "generated secrets are not 256-bit random hex"
+[[ "$(printf '%s' "$credentials_secret" | base64 --decode | wc -c)" == "32" ]] || fail "generated credentials key is not 256-bit Base64"
 [[ "$admin_secret" != "$metrics_secret" ]] || fail "independent generated secrets are equal"
-if grep -Fq "$admin_secret" "$first_output" || grep -Fq "$metrics_secret" "$first_output"; then
+if grep -Fq "$admin_secret" "$first_output" || grep -Fq "$credentials_secret" "$first_output" || grep -Fq "$metrics_secret" "$first_output"; then
   fail "setup output disclosed a generated secret"
 fi
 

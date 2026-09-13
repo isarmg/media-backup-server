@@ -37,50 +37,13 @@ export function initializeLanguage() {
     }
 }
 /** Reload deliberately: module-level messages and native clients share one locale.
- * Never persist forms or credentials, and never interrupt a pending form action.
+ * Language choice is an immediate navigation, never a second confirmation flow.
  */
 export function switchLanguage() {
-    if (document.querySelector('[aria-busy="true"], #sarmg-language-dialog'))
-        return;
-    const previous = document.activeElement;
-    const dialog = document.createElement("dialog");
-    dialog.id = "sarmg-language-dialog";
-    dialog.className = "sarmg-dialog action-dialog";
-    const heading = document.createElement("h2");
-    heading.id = "sarmg-language-heading";
-    heading.textContent = t("切换语言", "Change language");
-    dialog.setAttribute("aria-labelledby", heading.id);
-    const message = document.createElement("p");
-    message.id = "sarmg-language-message";
-    message.textContent = t("切换语言将重新载入页面，未保存的编辑将丢失。继续吗？", "Changing language reloads this page. Unsaved edits will be lost. Continue?");
-    dialog.setAttribute("aria-describedby", message.id);
-    const actions = document.createElement("div");
-    actions.className = "sarmg-actions action-dialog-actions";
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "sarmg-button";
-    cancel.textContent = t("取消", "Cancel");
-    const acceptButton = document.createElement("button");
-    acceptButton.type = "button";
-    acceptButton.className = "sarmg-button";
-    acceptButton.textContent = t("确认", "Confirm");
-    const close = () => { dialog.close(); dialog.remove(); if (previous instanceof HTMLElement && previous.isConnected)
-        previous.focus(); };
-    cancel.addEventListener("click", close);
-    dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
-    acceptButton.addEventListener("click", () => {
-        if (document.querySelector('[aria-busy="true"]'))
-            return;
-        const locale = getLocale() === "zh-CN" ? "en" : "zh-CN";
-        const url = new URL(window.location.href);
-        url.searchParams.set("lang", locale);
-        window.location.assign(url.href);
-    });
-    actions.append(cancel, acceptButton);
-    dialog.append(heading, message, actions);
-    document.body.append(dialog);
-    dialog.showModal();
-    cancel.focus();
+    const locale = getLocale() === "zh-CN" ? "en" : "zh-CN";
+    const url = new URL(window.location.href);
+    url.searchParams.set("lang", locale);
+    window.location.assign(url.href);
 }
 export function languageLabel() { return t("切换为英文", "Switch to Chinese"); }
 export function validationMessage(input) {

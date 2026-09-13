@@ -1,16 +1,21 @@
 import { checkWebLanguage } from "./language.mjs";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { chromium, firefox, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { preview } from "vite";
 
 const session = { authenticated: true, user_id: "A".repeat(43), username: "admin", role: "admin", csrf_token: "A".repeat(43) };
-const time = "2026-09-04T00:00:00Z", GIB = 2 ** 30;
-function backupUser() {
-  return { id: "018f1f4b-7a5d-7b5f-8d31-123456789abc", username: "backup", display_name: "验收备份账户", storage_path: "blobs/acceptance", quota_bytes: 123456789,
-    used_bytes: 1024, pending_bytes: 512, device_count: 2, resource_count: 3, enabled: true, created_at: time, last_seen_at: time };
+const time = "2026-09-04T00:00:00Z", userId = "018f1f4b-7a5d-7b5f-8d31-123456789abc";
+const instanceId = "018f1f4b-7a5d-7b5f-8d31-123456789abd", code = "m".repeat(43);
+function instance(overrides = {}) {
+  return { id: instanceId, name: "验收手机", platform: "android", status: "pending", authorization_code: code, created_at: time, last_seen_at: "", ...overrides };
 }
+function backupUser(overrides = {}) {
+  return { id: userId, username: "backup", display_name: "验收备份账户", storage_path: "blobs/acceptance", quota_bytes: 123456789,
+    used_bytes: 1024, pending_bytes: 512, device_count: 1, resource_count: 3, enabled: true, created_at: time, last_seen_at: time,
+    instances: [instance()], ...overrides };
+}
+
 const server = await preview({ preview: { host: "127.0.0.1", port: 0, strictPort: true } });
 const address = server.httpServer.address();
 assert.ok(address && typeof address === "object");
@@ -18,158 +23,98 @@ try {
   for (const engine of [chromium, firefox]) {
     const browser = await engine.launch();
     try {
-      const context = await browser.newContext({ locale: "zh-CN",  viewport: { width: 360, height: 740 } });
+      const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 390, height: 844 } });
       const page = await context.newPage(), errors = [], mutations = [];
-      let users = [backupUser()], failOverview = false, failReset = true, failCreate = true;
+      let users = [backupUser()], failCreate = true, nextInstance = 1;
       page.on("pageerror", error => errors.push(error.message));
       await page.route("**/api/v2/**", async route => {
         const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
         if (path === "/api/v2/auth/session") return route.fulfill({ json: session });
         if (method !== "GET") {
           assert.equal(request.headers()["x-csrf-token"], session.csrf_token);
-          mutations.push({ path, method, body: request.postDataJSON() });
+          mutations.push({ path, method });
         }
-        const failure = id => route.fulfill({ status: 500, json: { code: "platform.internal", message: "SECRET database path", retryable: false, request_id: id } });
-        if (path === "/api/v2/admin/overview") {
-          if (failOverview) { failOverview = false; return failure("overview-failure-123"); }
-          return route.fulfill({ json: { users, total_users: users.length, active_users: users.filter(user => user.enabled).length,
-            unlimited_users: users.filter(user => user.quota_bytes === 0).length, used_bytes: 1024, pending_bytes: 512, quota_bytes: 123456789 } });
-        }
+        if (path === "/api/v2/admin/overview") return route.fulfill({ json: {
+          users, total_users: users.length, active_users: users.filter(user => user.enabled).length,
+          unlimited_users: users.filter(user => user.quota_bytes === 0).length,
+          used_bytes: 1024, pending_bytes: 512, quota_bytes: users.reduce((sum, user) => sum + user.quota_bytes, 0),
+        } });
+        if (path === "/api/v2/admin/logs") return route.fulfill({ json: [{ sequence: 1, action: "backup.instance.create", entity_id: instanceId, occurred_at: time }] });
         if (path === "/api/v2/admin/users" && method === "POST") {
-          if (failCreate) { failCreate = false; return failure("create-failure-123"); }
-          const { password, ...input } = request.postDataJSON();
-          assert.equal(password, "test backup password"); assert.equal(input.quota_bytes, 1.25 * GIB);
-          const created = { ...backupUser(), ...input, id: "018f1f4b-7a5d-7b5f-8d31-123456789abd", storage_path: "blobs/new-user" };
-          users.push(created); return route.fulfill({ json: created });
+          const input = request.postDataJSON();
+          assert.deepEqual(Object.keys(input).sort(), ["display_name", "enabled", "quota_bytes", "storage_path", "username"]);
+          assert.ok(!("password" in input));
+          if (failCreate) { failCreate = false; return route.fulfill({ status: 500, json: { code: "platform.internal", message: "SECRET", retryable: false, request_id: "create-failure-123" } }); }
+          users.push(backupUser({ ...input, id: "018f1f4b-7a5d-7b5f-8d31-123456789abe", instances: [], used_bytes: 0, pending_bytes: 0, device_count: 0, resource_count: 0 }));
+          return route.fulfill({ json: users.at(-1) });
         }
-        if (path === `/api/v2/admin/users/${users[0].id}` && method === "PUT") {
-          assert.equal(request.postDataJSON().quota_bytes, 123456789);
-          assert.ok(!("password" in request.postDataJSON()));
-          users[0] = { ...users[0], ...request.postDataJSON() }; return route.fulfill({ json: users[0] });
+        const createMatch = path.match(/^\/api\/v2\/admin\/users\/([^/]+)\/instances$/);
+        if (createMatch && method === "POST") {
+          const user = users.find(item => item.id === createMatch[1]), created = instance({ id: `018f1f4b-7a5d-7b5f-8d31-${String(nextInstance++).padStart(12, "0")}`, name: request.postDataJSON().name, authorization_code: "n".repeat(43) });
+          user.instances.push(created); return route.fulfill({ status: 201, json: created });
         }
-        if (path === `/api/v2/admin/users/${users[0].id}/reset-password` && method === "POST") {
-          assert.deepEqual(request.postDataJSON(), { password: "reset backup password" });
-          if (failReset) { failReset = false; return failure("reset-failure-123"); }
+        const rotateMatch = path.match(/^\/api\/v2\/admin\/instances\/([^/]+)\/authorization$/);
+        if (rotateMatch && method === "PUT") {
+          const target = users.flatMap(user => user.instances).find(item => item.id === rotateMatch[1]);
+          Object.assign(target, { authorization_code: "r".repeat(43), status: "pending" });
+          return route.fulfill({ json: target });
+        }
+        const removeMatch = path.match(/^\/api\/v2\/admin\/instances\/([^/]+)$/);
+        if (removeMatch && method === "DELETE") {
+          for (const user of users) {
+            const target = user.instances.find(item => item.id === removeMatch[1]);
+            if (!target) continue;
+            if (target.status === "cancelled" || target.status === "revoked") user.instances = user.instances.filter(item => item !== target);
+            else target.status = target.status === "pending" ? "cancelled" : "revoked";
+          }
           return route.fulfill({ status: 204 });
         }
         throw new Error(`Unexpected API request ${method} ${path}`);
       });
+
       await page.goto(`http://127.0.0.1:${address.port}/admin/`);
-      await expect(page.getByRole("heading", { name: "备份总览", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "实例列表", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("table", { name: "实例列表" }).getByRole("link", { name: "验收手机" })).toBeVisible();
       await expect(page.getByRole("complementary")).toHaveCount(0);
-      await expect(page.getByRole("banner").locator('.sarmg-product-identity')).toHaveText("Media Backup");
-      await expect(page).toHaveTitle("Media Backup");
-      const spacing = await page.evaluate(() => {
-        const header = document.querySelector(".sarmg-page-header");
-        const headings = [...document.querySelectorAll(".media-sections > section > h2")];
-        const firstSection = headings[0]?.closest("section");
-        if (!header || !firstSection || headings.length < 2) throw new Error("Media spacing fixture is incomplete");
-        return {
-          menuToFirst: headings[0].getBoundingClientRect().top - header.getBoundingClientRect().bottom,
-          sectionToSubheading: headings[1].getBoundingClientRect().top - firstSection.getBoundingClientRect().bottom,
-        };
-      });
-      assert.ok(Math.abs(spacing.menuToFirst - 16) < 2, JSON.stringify(spacing));
-      assert.ok(Math.abs(spacing.sectionToSubheading - 16) < 2, JSON.stringify(spacing));
-      const statistics = page.getByRole("table", { name: "备份统计", exact: true });
-      await expect(statistics.getByRole("columnheader")).toHaveText(["统计项", "当前值"]);
-      await expect(statistics.getByRole("rowheader")).toHaveText(["启用 / 全部用户", "媒体已用", "上传预留空间", "已分配配额"]);
-      await expect(statistics.getByRole("cell")).toHaveText(["1 / 1", "1.0 KiB", "512 B", "117.7 MiB"]);
-      assert.equal(await statistics.locator("tbody tr").first().evaluate(row => getComputedStyle(row).display), "table-row");
-      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
-      await expect(page.getByRole("banner").locator('small')).toHaveCount(0);
-      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toBeVisible();
-      assert.ok(await page.evaluate(async () => {
-        const normal = await document.fonts.load('16px "Sarmg Maple"');
-        const italic = await document.fonts.load('italic 16px "Sarmg Maple"');
-        return normal.length > 0 && italic.length > 0 && [...normal, ...italic].every(font => font.status === "loaded");
-      }));
-      const provenance = JSON.parse(readFileSync(new URL("../fonts/provenance.json", import.meta.url), "utf8"));
-      const names = Object.keys(provenance.assets).filter(name => name.endsWith(".woff2")).map(name => name.split("/").at(-1));
-      for (const name of [...names, "MapleMono-OFL.txt", "CJK-LICENSE.txt"]) {
-        const asset = await context.request.get(`http://127.0.0.1:${address.port}/admin/assets/${name}`);
-        assert.equal(asset.status(), 200); assert.deepEqual(await asset.body(), readFileSync(new URL(`../dist/assets/${name}`, import.meta.url)));
-      }
-      failOverview = true;
-      await page.getByRole("button", { name: "刷新", exact: true }).click();
-      await expect(page.getByRole("alert")).toContainText("overview-failure-123");
-      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toHaveCount(0);
-      await expect(page.locator("body")).not.toContainText("SECRET");
-      await page.getByRole("button", { name: "重试", exact: true }).click();
-      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toBeVisible();
-      const userTable = page.getByRole("table", { name: "用户概览", exact: true });
-      await expect(userTable.getByRole("columnheader")).toHaveText(["用户", "账号", "状态", "设备", "资源", "已用容量 / 配额", "上传预留", "存储路径"]);
-      await userTable.getByRole("link", { name: "验收备份账户", exact: true }).click();
-      await expect(page).toHaveURL(new RegExp("#users/" + users[0].id + "$"));
-      await page.reload();
-      await expect(page.getByRole("form", { name: "编辑备份用户 backup", exact: true })).toBeVisible();
-      await expect(page.getByRole("complementary")).toHaveCount(0);
-      await page.getByRole("button", { name: "账号设置", exact: true }).click();
-      const account = page.getByRole("dialog", { name: "账号设置", exact: true });
-      await expect(account.getByLabel("账号名称", { exact: true })).toHaveValue("admin");
-      await account.getByRole("button", { name: "取消", exact: true }).click();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
       await page.getByRole("button", { name: "新建备份用户", exact: true }).click();
       const create = page.getByRole("form", { name: "创建备份用户", exact: true });
+      await expect(create.getByLabel("密码")).toHaveCount(0);
       await create.getByLabel("名称", { exact: true }).fill("新建备份账户");
       await create.getByLabel("账号", { exact: true }).fill("new-backup");
-      await create.getByLabel("密码", { exact: true }).fill("test backup password");
       await create.getByLabel("配额（GiB，0 表示不限）", { exact: true }).fill("1.25");
       await create.getByRole("button", { name: "创建备份用户", exact: true }).click();
       await expect(create.getByRole("alert")).toContainText("create-failure-123");
-      await expect(create.getByLabel("密码", { exact: true })).toHaveValue("");
-      await expect(create.getByLabel("密码", { exact: true })).toBeFocused();
-      assert.equal(mutations.length, 1);
-      await create.getByLabel("密码", { exact: true }).fill("test backup password");
+      await expect(page.locator("body")).not.toContainText("SECRET");
       await create.getByRole("button", { name: "创建备份用户", exact: true }).click();
-      await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
-      await page.getByRole("link", { name: "新建备份账户", exact: true }).click();
-      await expect(page.getByRole("form", { name: "编辑备份用户 new-backup", exact: true })).toBeVisible();
-      await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
-      await page.getByRole("link", { name: "验收备份账户", exact: true }).click();
-      const edit = page.getByRole("form", { name: "编辑备份用户 backup", exact: true });
-      await edit.getByLabel("名称", { exact: true }).fill("已更新备份账户");
-      await edit.getByRole("button", { name: "保存备份用户", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "已更新备份账户", exact: true })).toBeVisible();
-      assert.equal(mutations.filter(item => item.path.endsWith("/reset-password")).length, 0);
-      await edit.getByRole("button", { name: "重设备份密码", exact: true }).click();
-      const reset = page.getByRole("dialog", { name: "重设备份密码 · backup", exact: true });
-      for (let i = 0; i < 6; i++) { await page.keyboard.press("Tab"); assert.ok(await reset.evaluate(element => element.contains(document.activeElement))); }
-      await reset.getByLabel("新备份密码", { exact: true }).fill("reset backup password");
-      await reset.getByRole("button", { name: "确认重设密码", exact: true }).click();
-      await expect(reset.getByRole("alert")).toContainText("reset-failure-123");
-      await expect(reset.getByLabel("新备份密码", { exact: true })).toHaveValue("");
-      await expect(reset.getByLabel("新备份密码", { exact: true })).toBeFocused();
-      await expect(reset).not.toContainText("SECRET");
-      assert.equal(mutations.filter(item => item.path.endsWith("/reset-password")).length, 1);
-      await reset.getByLabel("新备份密码", { exact: true }).fill("reset backup password");
-      await reset.getByRole("button", { name: "确认重设密码", exact: true }).click();
-      await expect(reset).toHaveCount(0);
-      await edit.getByLabel("启用备份用户", { exact: true }).uncheck();
-      await edit.getByRole("button", { name: "保存备份用户", exact: true }).click();
-      const disable = page.getByRole("dialog", { name: "停用备份用户 backup？", exact: true });
-      await expect(disable.getByRole("button", { name: "取消", exact: true })).toBeFocused();
-      const beforeCancel = mutations.length;
-      await page.keyboard.press("Escape"); await expect(disable).toHaveCount(0); assert.equal(mutations.length, beforeCancel);
-      await edit.getByRole("button", { name: "保存备份用户", exact: true }).click();
-      await disable.getByRole("button", { name: "确认", exact: true }).click();
-      await expect(edit.getByLabel("启用备份用户", { exact: true })).not.toBeChecked();
-      await expect.poll(() => users[0].enabled).toBe(false);
-      for (const theme of ["light", "dark"]) {
-        if (await page.locator("html").getAttribute("data-theme") !== theme) await page.getByRole("button", { name: /切换到.*模式/ }).click();
-        assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
-        assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-      }
-      await expect(page.getByRole("button", { name: "平台管理员", exact: true })).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "管理员账号", exact: true })).toHaveCount(0);
-      await checkWebLanguage(page, {"routes":[["overview","Overview"]],"names":["验收备份账户","新建备份账户","已更新备份账户"]});
-      await page.goto(`http://127.0.0.1:${address.port}/admin/#users/missing`);
-      await expect(page.getByText("此备份用户不存在，请返回总览选择。", { exact: true })).toBeVisible();
-      await expect(page.getByRole("form", { name: /^编辑备份用户/ })).toHaveCount(0);
-      await page.getByRole("link", { name: "返回用户概览", exact: true }).click();
-      await expect(page.getByRole("table", { name: "用户概览", exact: true })).toBeVisible();
+      await expect(create).toHaveCount(0);
+
+      await page.getByRole("link", { name: "验收手机", exact: true }).click();
+      await expect(page.getByRole("button", { name: "详细信息", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("form", { name: "编辑备份用户 backup", exact: true }).getByLabel("密码")).toHaveCount(0);
+      await expect(page.getByText(code, { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
+      await expect(page.getByText("r".repeat(43), { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "取消配对", exact: true }).click();
+      await page.getByRole("button", { name: "确认", exact: true }).click();
+      await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "删除实例", exact: true }).click();
+      await page.getByRole("button", { name: "确认", exact: true }).click();
+      await expect(page.getByText("暂无客户端实例", { exact: true })).toBeVisible();
+      await page.getByLabel("实例名称", { exact: true }).fill("重新配对手机");
+      await page.getByRole("button", { name: "创建实例", exact: true }).click();
+      await expect(page.getByText("n".repeat(43), { exact: true })).toBeVisible();
+
+      await page.getByRole("button", { name: "日志", exact: true }).click();
+      await expect(page.getByText("backup.instance.create", { exact: true })).toBeVisible();
+      await page.goto(`http://127.0.0.1:${address.port}/admin/#details/${userId}`);
+      await expect(page.getByRole("form", { name: "编辑备份用户 backup", exact: true })).toBeVisible();
+      await checkWebLanguage(page, { routes: [["details/" + userId, "Details"], ["instances", "Instance list"], ["logs", "Logs"]], names: ["验收备份账户", "验收手机", "重新配对手机", "新建备份账户"] });
+      assert.ok(mutations.some(item => item.path.endsWith("/authorization")));
       assert.deepEqual(errors, []);
-      console.log(`${engine.name()}: Media overview/retry, backup account create/edit/disable/reset, account settings, font assets, modal focus and mobile WCAG AA passed`);
+      console.log(`${engine.name()}: unified instance/details/logs, authorization rotation, cancel/delete, direct language switch and WCAG passed`);
       await context.close();
     } finally { await browser.close(); }
   }

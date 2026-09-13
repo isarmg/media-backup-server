@@ -28,6 +28,8 @@ sarmg-schema-identity = { git = "https://github.com/isarmg/sarmg-foundation-serv
 sarmg-server-runtime = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "89eafaf171e409e6134fa669b140f615635baf5a", version = "=0.7.6" }
 sarmg-server-target = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "89eafaf171e409e6134fa669b140f615635baf5a", version = "=0.7.6" }
 sarmg-sqlite = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "89eafaf171e409e6134fa669b140f615635baf5a", version = "=0.7.6" }
+sarmg-secret.workspace = true
+sarmg-secret-envelope.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

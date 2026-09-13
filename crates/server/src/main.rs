@@ -3,6 +3,7 @@ mod api_access;
 mod audit;
 mod auth;
 mod config;
+mod crypto;
 mod database;
 mod doctor;
 mod error;
@@ -10,7 +11,6 @@ mod library;
 mod login_admission;
 mod media_delivery;
 mod metrics;
-mod password;
 mod release;
 mod rooted_fs;
 mod routes;
@@ -200,6 +200,7 @@ async fn build_state(
         sarmg_admin_auth::AdministratorOriginMode::ProductionHttps
     };
     Ok(AppState {
+        secrets: crypto::SecretBox::new(&config.credentials_key),
         pool,
         storage,
         config: config.clone(),

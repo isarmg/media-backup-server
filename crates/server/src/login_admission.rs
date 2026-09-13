@@ -6,10 +6,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use sha2::{Digest, Sha256};
-use tokio::sync::Semaphore;
-
 use crate::error::AppError;
+use sha2::{Digest, Sha256};
 
 pub(crate) const LOGIN_BODY_LIMIT_BYTES: usize = 4 * 1024;
 
@@ -20,20 +18,9 @@ const ACCOUNT_BURST: u32 = 8;
 const ACCOUNT_REFILL_INTERVAL: Duration = Duration::from_secs(15);
 const ACCOUNT_ENTRY_CAPACITY: usize = 4_096;
 const RATE_ENTRY_TTL: Duration = Duration::from_secs(15 * 60);
-const ARGON2_CONCURRENCY: usize = 2;
-const ARGON2_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(1);
-const ARGON2_EXECUTION_TIMEOUT: Duration = Duration::from_secs(10);
-// Generated with the Foundation 0.3 current Argon2id policy. It is never
-// accepted as a real credential.
-const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$aOVS660TGXMspMgoSOcv6A$1eMydp1lX0/SzNdUYR28nln2fa2gMPGF626+W6gPKK8";
-
 #[derive(Clone)]
 pub(crate) struct LoginAdmission {
     rates: Arc<Mutex<LoginRateState>>,
-    argon2_slots: Arc<Semaphore>,
-    argon2_acquire_timeout: Duration,
-    argon2_execution_timeout: Duration,
-    dummy_password_hash: Arc<str>,
 }
 
 impl Default for LoginAdmission {
@@ -44,56 +31,34 @@ impl Default for LoginAdmission {
             BucketPolicy::new(ACCOUNT_BURST, ACCOUNT_REFILL_INTERVAL),
             ACCOUNT_ENTRY_CAPACITY,
             RATE_ENTRY_TTL,
-            ARGON2_CONCURRENCY,
-            ARGON2_ACQUIRE_TIMEOUT,
-            ARGON2_EXECUTION_TIMEOUT,
         )
     }
 }
 
 impl LoginAdmission {
-    #[allow(clippy::too_many_arguments)]
     fn new(
         source_policy: BucketPolicy,
         source_capacity: usize,
         account_policy: BucketPolicy,
         account_capacity: usize,
         entry_ttl: Duration,
-        argon2_concurrency: usize,
-        argon2_acquire_timeout: Duration,
-        argon2_execution_timeout: Duration,
     ) -> Self {
-        assert!(argon2_concurrency > 0);
-        assert!(!argon2_acquire_timeout.is_zero());
-        assert!(!argon2_execution_timeout.is_zero());
         Self {
             rates: Arc::new(Mutex::new(LoginRateState {
                 sources: BoundedBuckets::new(source_policy, source_capacity, entry_ttl),
                 accounts: BoundedBuckets::new(account_policy, account_capacity, entry_ttl),
             })),
-            argon2_slots: Arc::new(Semaphore::new(argon2_concurrency)),
-            argon2_acquire_timeout,
-            argon2_execution_timeout,
-            dummy_password_hash: Arc::from(DUMMY_PASSWORD_HASH),
         }
     }
 
     #[cfg(test)]
-    pub(crate) fn for_test(
-        source_burst: u32,
-        account_burst: u32,
-        argon2_concurrency: usize,
-        argon2_acquire_timeout: Duration,
-    ) -> Self {
+    pub(crate) fn for_test(source_burst: u32, account_burst: u32) -> Self {
         Self::new(
             BucketPolicy::new(source_burst, Duration::from_secs(60)),
             8,
             BucketPolicy::new(account_burst, Duration::from_secs(60)),
             8,
             Duration::from_secs(300),
-            argon2_concurrency,
-            argon2_acquire_timeout,
-            Duration::from_secs(5),
         )
     }
 
@@ -121,59 +86,6 @@ impl LoginAdmission {
             .accounts
             .check_at(account_key(normalized_account), now)
             .map_err(rate_limited)
-    }
-
-    pub(crate) async fn verify(
-        &self,
-        password: String,
-        password_hash: Option<String>,
-    ) -> Result<bool, AppError> {
-        let password_hash: Arc<str> = password_hash
-            .map(Arc::from)
-            .unwrap_or_else(|| Arc::clone(&self.dummy_password_hash));
-        self.run_argon2(move || {
-            crate::password::verify_current_password_blocking(&password, &password_hash)
-        })
-        .await
-    }
-
-    async fn run_argon2<T, F>(&self, task: F) -> Result<T, AppError>
-    where
-        T: Send + 'static,
-        F: FnOnce() -> T + Send + 'static,
-    {
-        let permit = match tokio::time::timeout(
-            self.argon2_acquire_timeout,
-            Arc::clone(&self.argon2_slots).acquire_owned(),
-        )
-        .await
-        {
-            Ok(Ok(permit)) => permit,
-            Ok(Err(_)) => {
-                return Err(AppError::new(
-                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                    "password verification is unavailable",
-                ));
-            }
-            Err(_) => return Err(AppError::too_many_requests(1)),
-        };
-        let worker = tokio::task::spawn_blocking(move || {
-            // The permit stays inside the blocking task, including after an
-            // HTTP request is cancelled or its execution deadline expires.
-            let _permit = permit;
-            task()
-        });
-        match tokio::time::timeout(self.argon2_execution_timeout, worker).await {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(error)) => {
-                tracing::error!(%error, "password verification worker failed");
-                Err(AppError::new(
-                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                    "password verification is unavailable",
-                ))
-            }
-            Err(_) => Err(AppError::too_many_requests(1)),
-        }
     }
 }
 
@@ -334,15 +246,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    use tokio::sync::oneshot;
-
     use super::*;
 
     #[test]
     fn source_and_normalized_account_budgets_are_independent() {
-        let admission = LoginAdmission::for_test(2, 2, 1, Duration::from_millis(50));
+        let admission = LoginAdmission::for_test(2, 2);
         let now = Instant::now();
         let source: IpAddr = "192.0.2.10".parse().unwrap();
         admission.check_source_at(source, now).unwrap();
@@ -387,45 +295,5 @@ mod tests {
             .check_at("after-expiry", now + ttl + Duration::from_secs(3))
             .unwrap();
         assert_eq!(buckets.entries.len(), 1);
-    }
-
-    #[tokio::test]
-    async fn unknown_user_runs_the_real_dummy_argon2_verification() {
-        let admission = LoginAdmission::for_test(8, 8, 1, Duration::from_secs(1));
-        assert!(!admission
-            .verify("not-the-password".to_owned(), None)
-            .await
-            .unwrap());
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn argon2_semaphore_bounds_workers_and_times_out_waiters() {
-        let admission = LoginAdmission::for_test(8, 8, 1, Duration::from_millis(25));
-        let active = Arc::new(AtomicUsize::new(0));
-        let maximum = Arc::new(AtomicUsize::new(0));
-        let (started_tx, started_rx) = oneshot::channel();
-        let (release_tx, release_rx) = oneshot::channel();
-        let first_admission = admission.clone();
-        let first_active = Arc::clone(&active);
-        let first_maximum = Arc::clone(&maximum);
-        let first = tokio::spawn(async move {
-            first_admission
-                .run_argon2(move || {
-                    let current = first_active.fetch_add(1, Ordering::SeqCst) + 1;
-                    first_maximum.fetch_max(current, Ordering::SeqCst);
-                    let _ = started_tx.send(());
-                    let _ = release_rx.blocking_recv();
-                    first_active.fetch_sub(1, Ordering::SeqCst);
-                })
-                .await
-        });
-        started_rx.await.unwrap();
-        let waiting = admission.run_argon2(|| ()).await;
-        assert!(
-            matches!(waiting, Err(error) if error.status == axum::http::StatusCode::TOO_MANY_REQUESTS)
-        );
-        release_tx.send(()).unwrap();
-        first.await.unwrap().unwrap();
-        assert_eq!(maximum.load(Ordering::SeqCst), 1);
     }
 }

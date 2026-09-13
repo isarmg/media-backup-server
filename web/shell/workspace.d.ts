@@ -19,6 +19,12 @@ export declare function HeaderNavigation({ children, label }: {
     children: ReactNode;
     label?: string;
 }): import("react").ReactPortal | null;
+export type InstancePage = "instances" | "details" | "logs";
+export declare function InstancePageNavigation({ page, navigate, detailsDisabled }: {
+    page: InstancePage;
+    navigate(page: InstancePage): void;
+    detailsDisabled?: boolean;
+}): import("react").JSX.Element;
 export declare function HeaderActions({ children }: {
     children: ReactNode;
 }): import("react").ReactPortal | null;

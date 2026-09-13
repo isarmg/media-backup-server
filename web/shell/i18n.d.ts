@@ -6,7 +6,7 @@ export declare function getLocale(): Locale;
 export declare function t(zh: string, en: string, values?: readonly (string | number)[]): string;
 export declare function initializeLanguage(): void;
 /** Reload deliberately: module-level messages and native clients share one locale.
- * Never persist forms or credentials, and never interrupt a pending form action.
+ * Language choice is an immediate navigation, never a second confirmation flow.
  */
 export declare function switchLanguage(): void;
 export declare function languageLabel(): string;

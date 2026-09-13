@@ -15,7 +15,20 @@ export type BackupUser = {
   enabled: boolean;
   created_at: string;
   last_seen_at: string;
+  instances: BackupInstance[];
 };
+
+export type BackupInstance = {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  authorization_code: string;
+  created_at: string;
+  last_seen_at: string;
+};
+
+export type AdminLog = { sequence: number; action: string; entity_id: string; occurred_at: string };
 
 export type Overview = {
   users: BackupUser[];
@@ -36,6 +49,9 @@ const isNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value);
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 
+export const isBackupInstance: JsonGuard<BackupInstance> = (value): value is BackupInstance =>
+  isRecord(value) && ["id", "name", "platform", "status", "authorization_code", "created_at", "last_seen_at"].every(key => isString(value[key]));
+
 export const isBackupUser: JsonGuard<BackupUser> = (
   value,
 ): value is BackupUser =>
@@ -46,7 +62,8 @@ export const isBackupUser: JsonGuard<BackupUser> = (
   ["quota_bytes", "used_bytes", "pending_bytes", "device_count", "resource_count"].every(
     (key) => isNumber(value[key]),
   ) &&
-  isBoolean(value.enabled);
+  isBoolean(value.enabled) && Array.isArray(value.instances) && value.instances.every(isBackupInstance);
+
 
 export const isOverview: JsonGuard<Overview> = (value): value is Overview =>
   isRecord(value) &&

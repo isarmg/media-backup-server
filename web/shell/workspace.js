@@ -11,6 +11,14 @@ export function HeaderNavigation({ children, label = t("页面导航", "Page nav
     const target = useContext(HeaderNavigationContext);
     return target ? createPortal(_jsx("nav", { className: "sarmg-header-navigation", "aria-label": label, children: children }), target) : null;
 }
+export function InstancePageNavigation({ page, navigate, detailsDisabled = false }) {
+    const pages = [
+        ["instances", t("实例列表", "Instance list")],
+        ["details", t("详细信息", "Details")],
+        ["logs", t("日志", "Logs")],
+    ];
+    return _jsx(HeaderNavigation, { label: t("实例工作区", "Instance workspace"), children: pages.map(([id, label]) => _jsx(Button, { "aria-pressed": page === id, disabled: id === "details" && detailsDisabled, onClick: () => navigate(id), children: label }, id)) });
+}
 export function HeaderActions({ children }) {
     const target = useContext(HeaderActionsContext);
     return target ? createPortal(children, target) : null;

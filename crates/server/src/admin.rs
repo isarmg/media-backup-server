@@ -5,17 +5,19 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Json,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use sqlx::Row;
 use uuid::Uuid;
 
-use crate::{error::AppError, password, routes::AppState};
+use crate::{error::AppError, routes::AppState};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreateUserRequest {
     username: String,
-    password: String,
     display_name: String,
     storage_path: String,
     quota_bytes: i64,
@@ -32,12 +34,6 @@ pub(crate) struct UpdateUserRequest {
     enabled: bool,
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct ResetPasswordRequest {
-    password: String,
-}
-
 #[derive(Debug, Serialize)]
 pub(crate) struct AdminUser {
     id: Uuid,
@@ -52,6 +48,26 @@ pub(crate) struct AdminUser {
     enabled: bool,
     created_at: String,
     last_seen_at: String,
+    instances: Vec<AdminInstance>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct AdminInstance {
+    #[serde(skip)]
+    account_id: Uuid,
+    id: Uuid,
+    name: String,
+    platform: String,
+    status: String,
+    authorization_code: String,
+    created_at: String,
+    last_seen_at: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CreateInstanceRequest {
+    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,6 +79,14 @@ pub(crate) struct Overview {
     used_bytes: i64,
     pending_bytes: i64,
     quota_bytes: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct AdminLog {
+    sequence: i64,
+    action: String,
+    entity_id: String,
+    occurred_at: String,
 }
 
 pub(crate) async fn require_admin(
@@ -110,6 +134,21 @@ pub(crate) async fn overview(State(state): State<AppState>) -> Result<Json<Overv
     }))
 }
 
+pub(crate) async fn logs(State(state): State<AppState>) -> Result<Json<Vec<AdminLog>>, AppError> {
+    let rows = sqlx::query("SELECT sequence,action,COALESCE(entity_id,'') entity_id,strftime('%Y-%m-%dT%H:%M:%SZ',occurred_at) occurred_at FROM audit_events ORDER BY sequence DESC LIMIT 200")
+        .fetch_all(&state.pool).await?;
+    Ok(Json(
+        rows.into_iter()
+            .map(|row| AdminLog {
+                sequence: row.get("sequence"),
+                action: row.get("action"),
+                entity_id: row.get("entity_id"),
+                occurred_at: row.get("occurred_at"),
+            })
+            .collect(),
+    ))
+}
+
 pub(crate) async fn create_user(
     State(state): State<AppState>,
     Json(request): Json<CreateUserRequest>,
@@ -123,14 +162,12 @@ pub(crate) async fn create_user(
         request.storage_path.trim().to_owned()
     };
     validate_username(username)?;
-    password::require_current_policy(&request.password)?;
     validate_policy(display_name, &storage_path, request.quota_bytes)?;
     ensure_unique_username(&state, username, None).await?;
     ensure_unique_path(&state, &storage_path, None).await?;
     state.storage.validate_account_path(&storage_path).await?;
-    let password_hash = password::hash_current_password(request.password).await?;
-    sqlx::query("INSERT INTO accounts(id,username,password_hash,display_name,storage_path,quota_bytes,enabled,created_at) VALUES(?,?,?,?,?,?,?,datetime('now'))")
-        .bind(id).bind(username).bind(password_hash).bind(display_name).bind(&storage_path)
+    sqlx::query("INSERT INTO accounts(id,username,display_name,storage_path,quota_bytes,enabled,created_at) VALUES(?,?,?,?,?,?,datetime('now'))")
+        .bind(id).bind(username).bind(display_name).bind(&storage_path)
         .bind(request.quota_bytes).bind(request.enabled).execute(&state.pool).await?;
     Ok(Json(load_user(&state, id).await?))
 }
@@ -157,22 +194,166 @@ pub(crate) async fn update_user(
     Ok(Json(load_user(&state, id).await?))
 }
 
-pub(crate) async fn reset_user_password(
+pub(crate) async fn create_instance(
+    State(state): State<AppState>,
+    Path(account_id): Path<Uuid>,
+    Json(request): Json<CreateInstanceRequest>,
+) -> Result<Json<AdminInstance>, AppError> {
+    let name = request.name.trim();
+    if name.is_empty() || name.chars().count() > 32 || name.chars().any(char::is_control) {
+        return Err(AppError::bad_request(
+            "instance name must contain 1 to 32 characters without controls",
+        ));
+    }
+    let enabled: Option<bool> = sqlx::query_scalar("SELECT enabled FROM accounts WHERE id=?")
+        .bind(account_id)
+        .fetch_optional(&state.pool)
+        .await?;
+    if enabled != Some(true) {
+        return Err(AppError::not_found("enabled backup user not found"));
+    }
+    let id = Uuid::new_v4();
+    let code = random_authorization_code();
+    let encrypted = state
+        .secrets
+        .encrypt_client_authorization(&id.to_string(), &code)?;
+    let hash = Sha256::digest(code.as_bytes()).to_vec();
+    let mut transaction = state.pool.begin().await?;
+    sqlx::query("INSERT INTO devices(id,account_id,name,platform,token_hash,authorization_code_hash,authorization_code_enc,pairing_status,created_at,last_seen_at) VALUES(?,?,?,'unknown',NULL,?,?,'pending',datetime('now'),NULL)")
+        .bind(id).bind(account_id).bind(name).bind(hash).bind(encrypted).execute(&mut *transaction).await?;
+    write_instance_audit(&mut transaction, account_id, id, "device.instance.create").await?;
+    transaction.commit().await?;
+    load_instance(&state, id).await
+}
+
+pub(crate) async fn rotate_instance_authorization(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-    Json(request): Json<ResetPasswordRequest>,
-) -> Result<StatusCode, AppError> {
-    password::require_current_policy(&request.password)?;
-    let hash = password::hash_current_password(request.password).await?;
-    let changed = sqlx::query("UPDATE accounts SET password_hash=? WHERE id=?")
-        .bind(hash)
+) -> Result<Json<AdminInstance>, AppError> {
+    let account_id: Uuid = sqlx::query_scalar("SELECT account_id FROM devices WHERE id=?")
         .bind(id)
-        .execute(&state.pool)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| AppError::not_found("instance not found"))?;
+    let code = random_authorization_code();
+    let encrypted = state
+        .secrets
+        .encrypt_client_authorization(&id.to_string(), &code)?;
+    let hash = Sha256::digest(code.as_bytes()).to_vec();
+    let mut transaction = state.pool.begin().await?;
+    sqlx::query("UPDATE devices SET token_hash=NULL,authorization_code_hash=?,authorization_code_enc=?,pairing_status='pending',last_seen_at=datetime('now') WHERE id=?")
+        .bind(hash).bind(encrypted).bind(id).execute(&mut *transaction).await?;
+    write_instance_audit(
+        &mut transaction,
+        account_id,
+        id,
+        "device.authorization.rotate",
+    )
+    .await?;
+    transaction.commit().await?;
+    load_instance(&state, id).await
+}
+
+pub(crate) async fn remove_instance(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    let row: Option<(Uuid, String)> =
+        sqlx::query_as("SELECT account_id,pairing_status FROM devices WHERE id=?")
+            .bind(id)
+            .fetch_optional(&state.pool)
+            .await?;
+    let Some((account_id, status)) = row else {
+        return Err(AppError::not_found("instance not found"));
+    };
+    let mut transaction = state.pool.begin().await?;
+    if status == "cancelled" || status == "revoked" {
+        let references: i64 = sqlx::query_scalar("SELECT (SELECT COUNT(*) FROM assets WHERE device_id=?) + (SELECT COUNT(*) FROM uploads WHERE device_id=?) + (SELECT COUNT(*) FROM albums WHERE device_id=?) + (SELECT COUNT(*) FROM api_keys WHERE device_id=?)")
+            .bind(id).bind(id).bind(id).bind(id).fetch_one(&mut *transaction).await?;
+        if references != 0 {
+            return Err(AppError::conflict("instance still owns backup records"));
+        }
+        write_instance_audit(&mut transaction, account_id, id, "device.instance.delete").await?;
+        sqlx::query("DELETE FROM devices WHERE id=?")
+            .bind(id)
+            .execute(&mut *transaction)
+            .await?;
+    } else {
+        sqlx::query("UPDATE devices SET token_hash=NULL,pairing_status=? WHERE id=?")
+            .bind(if status == "pending" {
+                "cancelled"
+            } else {
+                "revoked"
+            })
+            .bind(id)
+            .execute(&mut *transaction)
+            .await?;
+        write_instance_audit(
+            &mut transaction,
+            account_id,
+            id,
+            if status == "pending" {
+                "device.pairing.cancel"
+            } else {
+                "device.instance.revoke"
+            },
+        )
         .await?;
-    if changed.rows_affected() == 0 {
-        return Err(AppError::not_found("user not found"));
     }
+    transaction.commit().await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn write_instance_audit(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    account_id: Uuid,
+    id: Uuid,
+    action: &str,
+) -> Result<(), AppError> {
+    sqlx::query("INSERT INTO audit_events(account_id,actor_kind,action,entity_kind,entity_id,occurred_at) VALUES(?,'administrator',?,'device',?,datetime('now'))")
+        .bind(account_id).bind(action).bind(id).execute(&mut **transaction).await?;
+    Ok(())
+}
+
+fn random_authorization_code() -> String {
+    let mut bytes = [0_u8; 32];
+    OsRng.fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+async fn load_instance(state: &AppState, id: Uuid) -> Result<Json<AdminInstance>, AppError> {
+    load_instances(state, Some(id))
+        .await?
+        .into_iter()
+        .next()
+        .map(Json)
+        .ok_or_else(|| AppError::not_found("instance not found"))
+}
+
+async fn load_instances(
+    state: &AppState,
+    only: Option<Uuid>,
+) -> Result<Vec<AdminInstance>, AppError> {
+    let rows = sqlx::query("SELECT id,account_id,name,platform,pairing_status,authorization_code_enc,strftime('%Y-%m-%dT%H:%M:%SZ',created_at) created_at,COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',last_seen_at),'') last_seen_at FROM devices WHERE (? IS NULL OR id=?) ORDER BY created_at")
+        .bind(only).bind(only).fetch_all(&state.pool).await?;
+    rows.into_iter()
+        .map(|row| {
+            let id: Uuid = row.get("id");
+            let encrypted: Vec<u8> = row.get("authorization_code_enc");
+            Ok(AdminInstance {
+                id,
+                account_id: row.get("account_id"),
+                name: row.get("name"),
+                platform: row.get("platform"),
+                status: row.get("pairing_status"),
+                authorization_code: state
+                    .secrets
+                    .decrypt_client_authorization(&id.to_string(), &encrypted)?,
+                created_at: row.get("created_at"),
+                last_seen_at: row.get("last_seen_at"),
+            })
+        })
+        .collect()
 }
 
 async fn load_users(state: &AppState) -> Result<Vec<AdminUser>, AppError> {
@@ -186,7 +367,16 @@ async fn load_users(state: &AppState) -> Result<Vec<AdminUser>, AppError> {
          COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',(SELECT MAX(d.last_seen_at) FROM devices d WHERE d.account_id=a.id)),'') AS last_seen_at \
          FROM accounts a ORDER BY a.created_at ASC",
     ).fetch_all(&state.pool).await?;
-    Ok(rows.into_iter().map(row_to_user).collect())
+    let instances = load_instances(state, None).await?;
+    let mut users = rows.into_iter().map(row_to_user).collect::<Vec<_>>();
+    for user in &mut users {
+        user.instances = instances
+            .iter()
+            .filter(|instance| instance.account_id == user.id)
+            .cloned()
+            .collect();
+    }
+    Ok(users)
 }
 
 async fn load_user(state: &AppState, id: Uuid) -> Result<AdminUser, AppError> {
@@ -211,6 +401,7 @@ fn row_to_user(row: sqlx::sqlite::SqliteRow) -> AdminUser {
         enabled: row.get("enabled"),
         created_at: row.get("created_at"),
         last_seen_at: row.get("last_seen_at"),
+        instances: Vec::new(),
     }
 }
 

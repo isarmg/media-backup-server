@@ -40,6 +40,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AppState {
+    pub secrets: crate::crypto::SecretBox,
     pub pool: SqlitePool,
     pub storage: LocalStorage,
     pub config: Config,
@@ -173,11 +174,20 @@ pub fn router(
 
     let admin_protected = Router::new()
         .route("/api/v2/admin/overview", get(admin::overview))
+        .route("/api/v2/admin/logs", get(admin::logs))
         .route("/api/v2/admin/users", post(admin::create_user))
         .route("/api/v2/admin/users/{id}", put(admin::update_user))
         .route(
-            "/api/v2/admin/users/{id}/reset-password",
-            post(admin::reset_user_password),
+            "/api/v2/admin/users/{id}/instances",
+            post(admin::create_instance),
+        )
+        .route(
+            "/api/v2/admin/instances/{id}/authorization",
+            put(admin::rotate_instance_authorization),
+        )
+        .route(
+            "/api/v2/admin/instances/{id}",
+            axum::routing::delete(admin::remove_instance),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -227,14 +237,14 @@ async fn bootstrap(
     headers: axum::http::HeaderMap,
     Json(request): Json<BootstrapRequest>,
 ) -> Result<Json<BootstrapResponse>, AppError> {
-    let username = request.username.trim();
-    if username.is_empty()
-        || request.password.is_empty()
+    let authorization_code = request.authorization_code.trim();
+    if authorization_code.len() < 32
+        || authorization_code.len() > 128
         || request.device_name.trim().is_empty()
         || request.platform.trim().is_empty()
     {
         return Err(AppError::bad_request(
-            "username, password, device_name and platform are required",
+            "authorization_code, device_name and platform are required",
         ));
     }
     let source = crate::trusted_proxy::resolve_client_ip(
@@ -243,44 +253,35 @@ async fn bootstrap(
         &state.config.trusted_proxy_cidrs,
     )?;
     state.login_admission.check_source(source)?;
-    state
-        .login_admission
-        .check_account(&format!("device:{}", username.to_lowercase()))?;
-    let account: Option<(Uuid, Option<String>)> = sqlx::query_as(
-        "SELECT id, password_hash FROM accounts WHERE lower(username) = lower(?) AND enabled = TRUE",
+    let authorization_hash = Sha256::digest(authorization_code.as_bytes()).to_vec();
+    state.login_admission.check_account(&format!(
+        "instance:{}",
+        URL_SAFE_NO_PAD.encode(&authorization_hash[..8])
+    ))?;
+    let instance: Option<(Uuid, Uuid)> = sqlx::query_as(
+        "SELECT d.id,d.account_id FROM devices d JOIN accounts a ON a.id=d.account_id \
+         WHERE d.authorization_code_hash=? AND d.pairing_status='pending' AND d.token_hash IS NULL AND a.enabled=TRUE",
     )
-    .bind(username)
+    .bind(&authorization_hash)
     .fetch_optional(&state.pool)
     .await?;
-    let verified = state
-        .login_admission
-        .verify(
-            request.password,
-            account
-                .as_ref()
-                .and_then(|(_, password_hash)| password_hash.clone()),
-        )
-        .await?;
-    let Some((account_id, Some(_))) = account.filter(|_| verified) else {
+    let Some((device_id, account_id)) = instance else {
         return Err(AppError::unauthorized());
     };
-    let mut transaction = state.pool.begin().await?;
+    let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
     let mut token_bytes = [0_u8; 32];
     OsRng.fill_bytes(&mut token_bytes);
     let bearer_token = URL_SAFE_NO_PAD.encode(token_bytes);
     let token_hash = Sha256::digest(bearer_token.as_bytes()).to_vec();
-    let device_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO devices(\
-             id, account_id, name, platform, token_hash, created_at, last_seen_at\
-         ) VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now')) RETURNING id",
+    let changed = sqlx::query(
+        "UPDATE devices SET platform=?,token_hash=?,pairing_status='paired',last_seen_at=datetime('now') \
+         WHERE id=? AND authorization_code_hash=? AND pairing_status='pending' AND token_hash IS NULL",
     )
-    .bind(Uuid::new_v4())
-    .bind(account_id)
-    .bind(request.device_name.trim())
-    .bind(request.platform.trim())
-    .bind(token_hash)
-    .fetch_one(&mut *transaction)
-    .await?;
+    .bind(request.platform.trim()).bind(token_hash).bind(device_id).bind(authorization_hash)
+    .execute(&mut *transaction).await?;
+    if changed.rows_affected() != 1 {
+        return Err(AppError::conflict("instance was paired concurrently"));
+    }
     sqlx::query(
         r#"
         INSERT INTO audit_events(

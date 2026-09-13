@@ -1,6 +1,7 @@
 use std::{env, net::SocketAddr, path::PathBuf};
 
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 
 use crate::trusted_proxy::TrustedNetwork;
 
@@ -20,6 +21,7 @@ pub struct Config {
     pub require_https: bool,
     pub development: bool,
     pub trusted_proxy_cidrs: Vec<TrustedNetwork>,
+    pub credentials_key: [u8; 32],
 }
 
 impl Config {
@@ -67,6 +69,15 @@ impl Config {
             .context(
                 "TRUSTED_PROXY_CIDRS must be a comma-separated list of exact IP/CIDR values",
             )?;
+        let decoded_key = STANDARD
+            .decode(
+                env::var("MEDIA_BACKUP_CREDENTIALS_KEY")
+                    .context("MEDIA_BACKUP_CREDENTIALS_KEY is required")?,
+            )
+            .context("MEDIA_BACKUP_CREDENTIALS_KEY must be valid base64")?;
+        let credentials_key: [u8; 32] = decoded_key.try_into().map_err(|_| {
+            anyhow::anyhow!("MEDIA_BACKUP_CREDENTIALS_KEY must decode to exactly 32 bytes")
+        })?;
         Ok(Self {
             database_url,
             data_dir,
@@ -80,6 +91,7 @@ impl Config {
             require_https,
             development,
             trusted_proxy_cidrs,
+            credentials_key,
         })
     }
 }

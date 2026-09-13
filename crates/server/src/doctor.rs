@@ -596,6 +596,7 @@ mod tests {
             require_https: false,
             development: true,
             trusted_proxy_cidrs: Vec::new(),
+            credentials_key: [7; 32],
         };
 
         let summary = run(&config).unwrap();
@@ -603,6 +604,6 @@ mod tests {
         assert_eq!(summary.files, 0);
         assert_eq!(summary.blobs, 0);
         assert_eq!(summary.uploads, 0);
-        assert_eq!(summary.schema_revision, 2);
+        assert_eq!(summary.schema_revision, 3);
     }
 }

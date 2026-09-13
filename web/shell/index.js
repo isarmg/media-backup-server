@@ -7,7 +7,7 @@ import { createAdministratorApiClient, } from "@sarmg/admin-web";
 import { useAdministratorSession } from "@sarmg/admin-web/react";
 import { WorkspaceContext, HeaderActionsContext, HeaderNavigationContext, WorkspaceIcon } from "./workspace.js";
 import { resolveWorkspaceConfig } from "./workspace-config.js";
-export { HeaderActions, HeaderNavigation, InstanceHeaderActions, InstanceWorkspace, InstanceNameField, WorkspaceIcon } from "./workspace.js";
+export { HeaderActions, HeaderNavigation, InstanceHeaderActions, InstancePageNavigation, InstanceWorkspace, InstanceNameField, WorkspaceIcon } from "./workspace.js";
 export { DEFAULT_WORKSPACE_CONFIG, resolveWorkspaceConfig, validInstanceName } from "./workspace-config.js";
 import { AccountSettings } from "./account.js";
 export { AccountSettings } from "./account.js";
@@ -65,7 +65,6 @@ function AdminShell({ options, client }) {
     const fontState = useApplicationFontsReady(workspace.fontFamily);
     const [accountUpdated, setAccountUpdated] = useState(false);
     const [logoutPending, setLogoutPending] = useState(false);
-    const [logoutError, setLogoutError] = useState(null);
     const [toasts, setToasts] = useState([]);
     const sequence = useRef(0);
     const [headerActions, setHeaderActions] = useState(null);
@@ -105,27 +104,24 @@ function AdminShell({ options, client }) {
         return () => { window.removeEventListener("popstate", changed); window.removeEventListener("hashchange", changed); };
     }, []);
     useEffect(() => {
-        if (session.phase !== "authenticated") {
+        if (session.phase !== "authenticated")
             setToasts([]);
-            setLogoutError(null);
-        }
-    }, [session.phase]);
+        if (session.phase === "authenticated" && accountUpdated)
+            setAccountUpdated(false);
+    }, [session.phase, accountUpdated]);
     const identity = _jsx("div", { className: "sarmg-product-identity", children: _jsx("strong", { children: options.product.name }) });
     if (session.phase === "loading" || fontState === "loading")
         return _jsx(ApplicationBootScreen, {});
     if (session.phase !== "authenticated") {
-        return _jsxs("div", { className: "sarmg-auth-shell", children: [_jsx("div", { className: "sarmg-auth-language", style: { position: "absolute", insetBlockStart: "1rem", insetInlineEnd: "1rem" }, children: _jsx(LanguageToggle, {}) }), _jsxs("div", { className: "sarmg-auth-card", children: [identity, accountUpdated && _jsx("p", { role: "status", children: t("账号已更新，请使用新账号信息登录。", "Account updated. Sign in with your updated credentials.") }), session.phase === "error" ? _jsx(ErrorState, { requestId: errorRequestId(session.error), onRetry: () => void session.restore(), children: t("无法恢复管理员会话。", "Unable to restore administrator session.") })
+        return _jsxs("div", { className: "sarmg-auth-shell", children: [_jsx("div", { className: "sarmg-auth-language", style: { position: "absolute", insetBlockStart: "1rem", insetInlineEnd: "1rem" }, children: _jsx(LanguageToggle, {}) }), _jsxs("div", { className: "sarmg-auth-card", children: [identity, accountUpdated && _jsx("p", { role: "status", children: t("账号已更新，请使用新账号信息登录。", "Account updated. Sign in with your updated credentials.") }), session.phase === "anonymous_logout_unconfirmed" && _jsx(ErrorState, { requestId: errorRequestId(session.error), children: t("本地已退出，但无法确认服务器会话已注销。请重试登录或关闭浏览器。", "Signed out locally, but the server session could not be confirmed as revoked. Sign in again or close the browser.") }), session.phase === "error" ? _jsx(ErrorState, { requestId: errorRequestId(session.error), onRetry: () => void session.restore(), children: t("无法恢复管理员会话。", "Unable to restore administrator session.") })
                             : _jsx(LoginPage, { login: session.login })] })] });
     }
     async function logout() {
         setLogoutPending(true);
-        setLogoutError(null);
         try {
             await session.logout();
         }
-        catch (error) {
-            setLogoutError(error);
-        }
+        catch { /* the anonymous state renders the warning */ }
         finally {
             setLogoutPending(false);
         }
@@ -133,7 +129,7 @@ function AdminShell({ options, client }) {
     return _jsx(Context.Provider, { value: { client, session: session.session, notify }, children: _jsxs("div", { className: "sarmg-admin-shell", style: { "--sarmg-header-icon-size": workspace.headerIconSize }, children: [_jsx("a", { className: "sarmg-skip-link", href: "#sarmg-main-content", onClick: event => {
                         event.preventDefault();
                         document.getElementById("sarmg-main-content")?.focus();
-                    }, children: t("跳至正文", "Skip to content") }), _jsxs(PageHeader, { children: [_jsx("div", { className: "sarmg-header-navigation-slot", children: _jsxs("div", { className: "sarmg-header-brand-navigation", children: [identity, _jsx("div", { ref: setHeaderNavigation, style: { display: "contents" }, children: options.navigation.length > 0 && _jsx("nav", { className: "sarmg-header-navigation", "aria-label": t("产品导航", "Product navigation"), children: options.navigation.map(item => _jsx("a", { href: item.href, "aria-current": (item.href.startsWith("#") ? location.endsWith(item.href) : location === item.href) ? "page" : undefined, children: item.label }, item.href)) }) })] }) }), _jsxs("div", { className: "sarmg-header-actions", role: "group", "aria-label": t("全局操作", "Global actions"), children: [_jsx("div", { ref: setHeaderActions, style: { display: "contents" } }), _jsx(LanguageToggle, {}), _jsx(ThemeToggle, {}), _jsx(IconButton, { disabled: logoutPending, "aria-label": logoutPending ? t("正在退出…", "Signing out…") : t("退出", "Sign out"), title: logoutPending ? t("正在退出…", "Signing out…") : t("退出", "Sign out"), onClick: () => void logout(), children: workspace.headerControls === "icons" ? _jsx(WorkspaceIcon, { name: "logout" }) : t("退出", "Sign out") }), _jsx(AccountSettings, { client: client, username: session.session.username, onUpdated: () => setAccountUpdated(true) })] })] }), toasts.length > 0 && _jsx("div", { className: "sarmg-toast-stack", role: "region", "aria-label": t("通知", "Notifications"), children: toasts.map(toast => _jsxs(Toast, { children: [_jsx("span", { children: toast.message }), _jsx(IconButton, { "aria-label": t("关闭通知", "Dismiss notification"), onClick: () => setToasts(current => current.filter(item => item.id !== toast.id)), children: "\u00D7" })] }, toast.id)) }), _jsx("div", { className: "sarmg-shell-layout sarmg-shell-layout--full", children: _jsxs("main", { id: "sarmg-main-content", className: "sarmg-shell-main", tabIndex: -1, children: [logoutError !== null && _jsx(ErrorState, { requestId: errorRequestId(logoutError), children: t("无法确认退出结果，请重试。", "Sign out could not be confirmed. Try again.") }), _jsx(ApplicationErrorBoundary, { resetKey: location, children: _jsx(WorkspaceContext.Provider, { value: workspace, children: _jsx(HeaderNavigationContext.Provider, { value: headerNavigation, children: _jsx(HeaderActionsContext.Provider, { value: headerActions, children: options.routes }) }) }) })] }) })] }) });
+                    }, children: t("跳至正文", "Skip to content") }), _jsxs(PageHeader, { children: [_jsx("div", { className: "sarmg-header-navigation-slot", children: _jsxs("div", { className: "sarmg-header-brand-navigation", children: [identity, _jsx("div", { ref: setHeaderNavigation, style: { display: "contents" }, children: options.navigation.length > 0 && _jsx("nav", { className: "sarmg-header-navigation", "aria-label": t("产品导航", "Product navigation"), children: options.navigation.map(item => _jsx("a", { href: item.href, "aria-current": (item.href.startsWith("#") ? location.endsWith(item.href) : location === item.href) ? "page" : undefined, children: item.label }, item.href)) }) })] }) }), _jsxs("div", { className: "sarmg-header-actions", role: "group", "aria-label": t("全局操作", "Global actions"), children: [_jsx("div", { ref: setHeaderActions, style: { display: "contents" } }), _jsx(LanguageToggle, {}), _jsx(ThemeToggle, {}), _jsx(IconButton, { disabled: logoutPending, "aria-label": logoutPending ? t("正在退出…", "Signing out…") : t("退出", "Sign out"), title: logoutPending ? t("正在退出…", "Signing out…") : t("退出", "Sign out"), onClick: () => void logout(), children: workspace.headerControls === "icons" ? _jsx(WorkspaceIcon, { name: "logout" }) : t("退出", "Sign out") }), _jsx(AccountSettings, { client: client, username: session.session.username, onUpdated: () => setAccountUpdated(true) })] })] }), toasts.length > 0 && _jsx("div", { className: "sarmg-toast-stack", role: "region", "aria-label": t("通知", "Notifications"), children: toasts.map(toast => _jsxs(Toast, { children: [_jsx("span", { children: toast.message }), _jsx(IconButton, { "aria-label": t("关闭通知", "Dismiss notification"), onClick: () => setToasts(current => current.filter(item => item.id !== toast.id)), children: "\u00D7" })] }, toast.id)) }), _jsx("div", { className: "sarmg-shell-layout sarmg-shell-layout--full", children: _jsx("main", { id: "sarmg-main-content", className: "sarmg-shell-main", tabIndex: -1, children: _jsx(ApplicationErrorBoundary, { resetKey: location, children: _jsx(WorkspaceContext.Provider, { value: workspace, children: _jsx(HeaderNavigationContext.Provider, { value: headerNavigation, children: _jsx(HeaderActionsContext.Provider, { value: headerActions, children: options.routes }) }) }) }) }) })] }) });
 }
 const CORE_FONT_SAMPLE = "管理员登录 Username Password Sign in";
 const FONT_BOOT_TIMEOUT_MS = 1200;
@@ -154,15 +150,12 @@ function useApplicationFontsReady(fontFamily) {
                 setState("fallback");
             }
         }, FONT_BOOT_TIMEOUT_MS);
-        void Promise.all([
-            document.fonts.load('400 16px "Sarmg Maple Bootstrap"', CORE_FONT_SAMPLE),
-            document.fonts.load('700 16px "Sarmg Maple Bootstrap"', CORE_FONT_SAMPLE),
-        ]).then(results => {
+        void document.fonts.load('400 16px "Sarmg Maple Bootstrap"', CORE_FONT_SAMPLE).then(faces => {
             if (!active)
                 return;
             active = false;
             window.clearTimeout(timeout);
-            setState(results.every(faces => faces.length > 0) ? "ready" : "fallback");
+            setState(faces.length > 0 ? "ready" : "fallback");
         }, () => {
             if (!active)
                 return;

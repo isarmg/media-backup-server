@@ -98,8 +98,7 @@ CREATE TABLE accounts (
     storage_path TEXT NOT NULL,
     quota_bytes INTEGER NOT NULL DEFAULT 107374182400,
     enabled INTEGER NOT NULL DEFAULT 1,
-    username TEXT NOT NULL,
-    password_hash TEXT
+    username TEXT NOT NULL
 );
 
 CREATE TABLE devices (
@@ -107,9 +106,12 @@ CREATE TABLE devices (
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     platform TEXT NOT NULL,
-    token_hash BLOB NOT NULL UNIQUE,
+    token_hash BLOB UNIQUE,
+    authorization_code_hash BLOB NOT NULL UNIQUE CHECK (length(authorization_code_hash) = 32),
+    authorization_code_enc BLOB NOT NULL CHECK (length(authorization_code_enc) BETWEEN 64 AND 1024),
+    pairing_status TEXT NOT NULL DEFAULT 'paired' CHECK (pairing_status IN ('pending', 'paired', 'cancelled', 'revoked')),
     created_at TEXT NOT NULL,
-    last_seen_at TEXT NOT NULL
+    last_seen_at TEXT
 );
 
 CREATE TABLE assets (

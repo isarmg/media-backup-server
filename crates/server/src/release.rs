@@ -690,14 +690,14 @@ mod tests {
         assert_eq!(identity.target, env!("MEDIA_BACKUP_BUILD_TARGET"));
         assert_eq!(identity.api_version, media_backup_protocol::API_VERSION);
         assert_eq!(identity.storage_encoding, "plain-v1");
-        assert_eq!(identity.server_schema_revision, 2);
+        assert_eq!(identity.server_schema_revision, 3);
         assert_eq!(
             identity.web_assets_sha256,
-            "ac6c40fd9c93127fcff2d2cf61cfc9ad79959d27f308111bfad7a2fada71f59a"
+            "d6d5c2783243a3774623c217c90ffb840727fce51435846400f6011fb1781e67"
         );
         assert_eq!(
             identity.release_contract_sha256,
-            "eaad9f44077fd0923ea5b61bf26d323ffd95b13fabca3d48556184f74f625fb9"
+            "db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f"
         );
     }
 
