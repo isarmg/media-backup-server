@@ -12,6 +12,7 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   --sarmg-focus: #245b75;
   --sarmg-block-muted: #60707c;
   --sarmg-block-border: #d9dfd5;
+  --sarmg-content-spacing: var(--sarmg-space-4, 16px);
   --sarmg-radius-sm: 14px;
   --sarmg-radius-md: 20px;
   --sarmg-radius-lg: 26px;
@@ -37,8 +38,8 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   .sarmg-header-navigation a { text-decoration: none; border-radius: 0; }
   .sarmg-header-actions svg { width: var(--sarmg-header-icon-size, 1em); height: var(--sarmg-header-icon-size, 1em); }
   &:not([data-sarmg-selection="custom"]) .sarmg-header-navigation [aria-current="page"] { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; }
-  .sarmg-native-workspace { margin: 16px; }
-  .sarmg-native-workspace > .main { margin: 0; min-width: 0; padding: 16px; border-radius: 20px; background: var(--sarmg-bg-panel); }
+  .sarmg-native-workspace { margin: var(--sarmg-content-spacing); }
+  .sarmg-native-workspace > .main { margin: 0; min-width: 0; padding: var(--sarmg-content-spacing); border-radius: 20px; background: var(--sarmg-bg-panel); }
   .sarmg-instance-list a { padding: .5rem .75rem; overflow-wrap: anywhere; }
   &:not([data-sarmg-selection="custom"]) :is(.sarmg-navigation a[aria-current="page"], .sarmg-button[aria-pressed="true"], .sarmg-instance-list [aria-current="page"]) { background: transparent; color: var(--sarmg-text-primary); box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
   .sarmg-instance-sidebar { display: grid; align-content: start; gap: 12px; min-width: 0; position: sticky; top: 16px; max-height: calc(100dvh - 100px); overflow-y: auto; }
@@ -47,7 +48,7 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   .sarmg-instance-list .sarmg-button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sarmg-instance-workspace .sarmg-button[aria-pressed] { color: var(--sarmg-text-primary); }
   &:not([data-sarmg-selection="custom"]) .sarmg-instance-workspace .sarmg-button[aria-pressed="true"] { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
-  .sarmg-instance-detail { min-width: 0; display: grid; gap: 16px; }
+  .sarmg-instance-detail { min-width: 0; display: grid; gap: var(--sarmg-content-spacing); }
   .sarmg-instance-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
   .sarmg-instance-detail dd { margin: 0; overflow-wrap: anywhere; }
   @media (max-width: 360px) {
@@ -99,8 +100,20 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   .sarmg-page-header, .sarmg-navigation { border: 0; background: transparent; }
   .sarmg-navigation a { text-decoration: none; }
   .sarmg-navigation a[aria-current="page"] { background: var(--sarmg-bg-panel); color: var(--sarmg-text-link); font-weight: 400; }
-  .sarmg-shell-main { display: grid; align-content: start; gap: 16px; }
+  .sarmg-shell-main { display: grid; align-content: start; gap: var(--sarmg-content-spacing); padding: var(--sarmg-content-spacing); }
   .sarmg-shell-main > * { min-width: 0; }
+  :where(.sarmg-shell-main > section, .sarmg-shell-main > div, .sarmg-content-panel, .sarmg-content-stack) {
+    display: grid;
+    align-content: start;
+    gap: var(--sarmg-content-spacing);
+    min-width: 0;
+  }
+  .sarmg-shell-main > section > *,
+  .sarmg-shell-main > div > *,
+  .sarmg-content-panel > *,
+  .sarmg-content-stack > * {
+    margin-block: 0;
+  }
   .sarmg-button { border: 0; background: transparent; color: var(--sarmg-text-link); font-weight: 400; }
   .sarmg-button:hover { text-decoration: underline; }
   .sarmg-input { border-color: var(--sarmg-block-border); background: transparent; }
@@ -237,7 +250,7 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
 
   /* Native-ESM pages use the same palette and block surfaces. */
   .login-card .card-row-label { color: var(--sarmg-block-muted); }
-  body > .main { margin: 16px; padding: 16px; border-radius: 20px; background: var(--sarmg-bg-panel); }
+  body > .main { margin: var(--sarmg-content-spacing); padding: var(--sarmg-content-spacing); border-radius: 20px; background: var(--sarmg-bg-panel); }
   .action-dialog { border: 0; border-radius: 26px; background: var(--sarmg-bg-panel); }
 
   @media (forced-colors: active) {

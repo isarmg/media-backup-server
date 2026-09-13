@@ -1,6 +1,6 @@
 /* Business layout only; Foundation owns fonts, themes and UI controls. */
 .media-business { min-width: 0; }
-.media-sections { grid-template-columns: minmax(0, 1fr); display: grid; gap: 2rem; margin-top: 1.5rem; }
+.media-sections { grid-template-columns: minmax(0, 1fr); display: grid; gap: var(--sarmg-content-spacing, 16px); }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
 .media-card { min-width: 0; overflow-wrap: anywhere; }
 .media-card dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }

@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { t } from "@sarmg/admin-ui/i18n";
-import { languageLabel, switchLanguage, validationMessage } from "@sarmg/admin-ui/i18n";
+import { t } from "./i18n.js";
+import { languageLabel, switchLanguage, validationMessage } from "./i18n.js";
 import { Component, createContext, useCallback, useContext, useEffect, useId, useRef, useState, } from "react";
 import { Button, ErrorState, FormField, IconButton, PageHeader, TextField, Toast, } from "@sarmg/admin-ui";
 import { createAdministratorApiClient, } from "@sarmg/admin-web";

@@ -1,5 +1,5 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { t } from "@sarmg/admin-ui/i18n";
+import { t } from "./i18n.js";
 import { createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 import { Button, IconButton, TextField } from "@sarmg/admin-ui";
@@ -25,7 +25,7 @@ export function InstanceHeaderActions({ create, refresh, refreshing = false, cre
 export function InstanceWorkspace({ instances, selected, select, label = t("实例", "Instances"), showSidebar = true, children }) {
     const config = useContext(WorkspaceContext);
     const sidebarVisible = showSidebar && instances.length > 0;
-    return _jsxs("div", { className: config.layout === "instances" ? `sarmg-instance-workspace${sidebarVisible ? "" : " sarmg-instance-workspace--full"}` : "sarmg-custom-workspace", children: [sidebarVisible && _jsx("aside", { className: "sarmg-instance-sidebar", "aria-label": label, children: _jsx("div", { className: "sarmg-instance-list", children: instances.map(item => _jsx(Button, { title: item.name, "aria-label": t("选择实例 {0}", "Select instance {0}", [item.name]), "aria-pressed": selected === item.id, onClick: () => select(item.id), children: _jsx("span", { children: item.name }) }, item.id)) }) }), _jsx("section", { "aria-label": t("实例详情与设置", "Instance details and settings"), children: children })] });
+    return _jsxs("div", { className: config.layout === "instances" ? `sarmg-instance-workspace${sidebarVisible ? "" : " sarmg-instance-workspace--full"}` : "sarmg-custom-workspace", children: [sidebarVisible && _jsx("aside", { className: "sarmg-instance-sidebar", "aria-label": label, children: _jsx("div", { className: "sarmg-instance-list", children: instances.map(item => _jsx(Button, { title: item.name, "aria-label": t("选择实例 {0}", "Select instance {0}", [item.name]), "aria-pressed": selected === item.id, onClick: () => select(item.id), children: _jsx("span", { children: item.name }) }, item.id)) }) }), _jsx("section", { className: "sarmg-content-stack", "aria-label": t("实例详情与设置", "Instance details and settings"), children: children })] });
 }
 /** Count Unicode scalar values, matching Rust chars(); do not use UTF-16 maxLength. */
 export function InstanceNameField({ onChange, onInput, ...props }) {

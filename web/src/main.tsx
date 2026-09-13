@@ -55,7 +55,7 @@ function Application() {
     return () => controller.abort();
   }, [generation, view]);
   const user = overview?.users.find(item => item.id === selected);
-  return <div className="media-business">
+  return <div className="media-business sarmg-content-stack">
     <InstanceHeaderActions create={() => setCreating(true)} createLabel={t("新建备份用户", "Create backup user")} refresh={reload} />
     <HeaderNavigation label={t("备份管理功能", "Backup management navigation")}>{[["overview",t("总览", "Overview")]].map(([id,name]) => <Button key={id} aria-pressed={view === id} onClick={() => { window.location.hash = id!; }}>{name}</Button>)}</HeaderNavigation>
     <h1 className="sarmg-visually-hidden">{view === "overview" ? t("备份总览", "Backup overview") : t("备份用户", "Backup users")}</h1>
@@ -168,7 +168,7 @@ function BackupPasswordDialog({ user, close }: { user: BackupUser; close(): void
   </Dialog>;
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) { return <section><h2>{title}</h2>{children}</section>; }
+function Section({ title, children }: { title: string; children: ReactNode }) { return <section className="sarmg-content-stack"><h2>{title}</h2>{children}</section>; }
 function bytes(value: number): string {
   for (const [scale, label] of [[2 ** 40, "TiB"], [2 ** 30, "GiB"], [2 ** 20, "MiB"], [2 ** 10, "KiB"]] as const) {
     if (value >= scale) return (value / scale).toFixed(1) + " " + label;

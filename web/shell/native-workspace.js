@@ -1,5 +1,5 @@
-import { t } from "@sarmg/admin-ui/i18n";
-import { createLanguageControl } from "@sarmg/admin-ui/i18n";
+import { t } from "./i18n.js";
+import { createLanguageControl } from "./i18n.js";
 import { resolveWorkspaceConfig, WORKSPACE_ICON_PATHS, validInstanceName } from "./workspace-config.js";
 /** Native Web adapter: retains existing product listeners, including logout/CSRF. */
 export function configureNativeWorkspace({ header, content, actions, create, logout, refresh, instanceName, instanceHref, labels = {}, config: input }) {

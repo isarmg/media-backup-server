@@ -59,6 +59,18 @@ try {
       await expect(page.getByRole("complementary")).toHaveCount(0);
       await expect(page.getByRole("banner").locator('.sarmg-product-identity')).toHaveText("Media Backup");
       await expect(page).toHaveTitle("Media Backup");
+      const spacing = await page.evaluate(() => {
+        const header = document.querySelector(".sarmg-page-header");
+        const headings = [...document.querySelectorAll(".media-sections > section > h2")];
+        const firstSection = headings[0]?.closest("section");
+        if (!header || !firstSection || headings.length < 2) throw new Error("Media spacing fixture is incomplete");
+        return {
+          menuToFirst: headings[0].getBoundingClientRect().top - header.getBoundingClientRect().bottom,
+          sectionToSubheading: headings[1].getBoundingClientRect().top - firstSection.getBoundingClientRect().bottom,
+        };
+      });
+      assert.ok(Math.abs(spacing.menuToFirst - 16) < 2, JSON.stringify(spacing));
+      assert.ok(Math.abs(spacing.sectionToSubheading - 16) < 2, JSON.stringify(spacing));
       const statistics = page.getByRole("table", { name: "备份统计", exact: true });
       await expect(statistics.getByRole("columnheader")).toHaveText(["统计项", "当前值"]);
       await expect(statistics.getByRole("rowheader")).toHaveText(["启用 / 全部用户", "媒体已用", "上传预留空间", "已分配配额"]);
