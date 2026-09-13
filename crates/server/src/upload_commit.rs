@@ -277,9 +277,7 @@ async fn complete_inner(
     stop_at(failpoint, CommitFailpoint::MetadataCommitted)?;
     if let Some(staged_key) = ready.staged_key.as_deref() {
         if let Err(error) =
-            state
-                .storage
-                .remove_commit_stage(&ready.account_path, ready.upload_id, staged_key)
+            cleanup_committed_stage(state, ready.upload_id, &ready.account_path, staged_key).await
         {
             tracing::warn!(upload_id = %upload_id, ?error, "committed staged blob needs reconciliation cleanup");
         }
@@ -598,15 +596,17 @@ async fn validate_committed(
     let metadata = sqlx::query(
         r#"
         SELECT b.storage_path, b.stored_size, b.content_blake3
-        FROM resources r
-        JOIN blobs b ON b.id = r.blob_id
-        WHERE r.id = ? AND r.asset_id = ? AND b.id = ? AND b.account_id = ?
+        FROM blobs b
+        WHERE b.id = ? AND b.account_id = ?
+          AND EXISTS (
+              SELECT 1 FROM resources r WHERE r.id = ? AND r.asset_id = ?
+          )
         "#,
     )
-    .bind(resource_id)
-    .bind(ready.asset_id)
     .bind(ready.proposed_blob_id)
     .bind(ready.account_id)
+    .bind(resource_id)
+    .bind(ready.asset_id)
     .fetch_optional(&state.pool)
     .await?;
     let Some(metadata) = metadata else {
@@ -642,15 +642,33 @@ async fn validate_committed(
         }
     }
     if let Some(staged_key) = ready.staged_key.as_deref() {
-        state
-            .storage
-            .remove_commit_stage(&ready.account_path, ready.upload_id, staged_key)?;
+        cleanup_committed_stage(state, ready.upload_id, &ready.account_path, staged_key).await?;
     }
     Ok(CommitOutcome {
         resource_id,
         asset_id: ready.asset_id,
         deduplicated: record.deduplicated,
     })
+}
+
+async fn cleanup_committed_stage(
+    state: &AppState,
+    upload_id: Uuid,
+    account_path: &str,
+    staged_key: &str,
+) -> Result<(), AppError> {
+    state
+        .storage
+        .remove_commit_stage(account_path, upload_id, staged_key)?;
+    sqlx::query(
+        "UPDATE uploads SET commit_staged_key = NULL, updated_at = datetime('now') \
+         WHERE id = ? AND commit_state = 'committed' AND commit_staged_key = ?",
+    )
+    .bind(upload_id)
+    .bind(staged_key)
+    .execute(&state.pool)
+    .await?;
+    Ok(())
 }
 
 fn ready_commit(record: &CommitRecord) -> Result<ReadyCommit, &'static str> {
@@ -926,7 +944,8 @@ pub(crate) async fn reconcile_all(state: &AppState) -> Result<ReconcileReport, A
     let upload_ids: Vec<Uuid> = sqlx::query_scalar(
         r#"
         SELECT id FROM uploads
-        WHERE commit_state IN ('commit_started', 'finalizing', 'committed')
+        WHERE commit_state IN ('commit_started', 'finalizing')
+           OR (commit_state = 'committed' AND commit_staged_key IS NOT NULL)
         ORDER BY updated_at, id
         "#,
     )
@@ -938,7 +957,22 @@ pub(crate) async fn reconcile_all(state: &AppState) -> Result<ReconcileReport, A
             .bind(upload_id)
             .fetch_one(&state.pool)
             .await?;
-        match complete_inner(state, upload_id, None, None).await {
+        let result: Result<(), AppError> = if before == COMMITTED {
+            let _guard = state.storage.lock_upload_commit(upload_id).await?;
+            let record = load_commit(&state.pool, upload_id, None).await?;
+            let ready = ready_commit(&record).map_err(AppError::conflict)?;
+            match ready.staged_key.as_deref() {
+                Some(staged_key) => {
+                    cleanup_committed_stage(state, upload_id, &ready.account_path, staged_key).await
+                }
+                None => continue,
+            }
+        } else {
+            complete_inner(state, upload_id, None, None)
+                .await
+                .map(|_| ())
+        };
+        match result {
             Ok(_) => {
                 if before != COMMITTED {
                     report.recovered = report.recovered.saturating_add(1);

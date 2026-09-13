@@ -99,7 +99,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-U-015 | final object 与 stage 位于同一受控文件系统，以 no-replace `linkat` 发布同一 inode、核对 device+inode 后 fsync 目标父目录 | `RootedFs::link_no_replace`、`CommitKeys` | 保障 | 高 | 可覆盖 winner、发布错误实体或在崩溃后丢目录项 | `EEXIST`、identity swap、fsync 故障；不是 rename |
 | MED-U-016 | metadata commit 有 blob 唯一竞争重试，最终 resource upsert 幂等 | `commit_metadata_with_race_retry`、unique index | 保障 | 高 | 并发相同内容会报随机冲突或重复 blob | 双 complete、唯一约束 race、返回 deduplicated |
 | MED-U-017 | commit 前再次核对 account enabled、storage path、quota 和对象身份 | `begin_commit`、`ensure_commit_quota` | 保障 | 高 | 上传期间改账户策略后仍可越权提交 | disable、path change、quota shrink |
-| MED-U-018 | serve 启动时先 reconcile active commits 与无引用 blob，之后每 120 秒重复且跳过错过 tick；`reconcile scan` 提供持锁手工入口，无法证明的 upload 状态标 unknown 而非伪成功 | `upload_commit::reconcile_all`、`main.rs` | 保障 | 高 | 崩溃后的 stage/final/DB 组合或待回收 blob 会永久卡住，亦可能被误删 | commit_started/finalizing 各物理组合、orphan blob、周期/手工重试；后台任务无独立 graceful join |
+| MED-U-018 | serve 启动时先 reconcile 未完成 commits、遗留 committed stage 与无引用 blob，之后每 120 秒重复且跳过错过 tick；周期任务不重新 Hash 已完成历史 blob。`reconcile scan` 提供持锁手工入口，无法证明的未完成状态标 unknown 而非伪成功 | `upload_commit::reconcile_all`、`main.rs` | 保障 | 高 | 崩溃后的 stage/final/DB 组合或待回收 blob 会永久卡住；反复扫描历史内容会造成随数据量增长的固定负载 | commit_started/finalizing 各物理组合、committed stage 清理、历史资源版本、orphan blob、周期/手工重试；后台任务无独立 graceful join |
 | MED-U-019 | rooted filesystem 拒绝绝对路径、`.`/`..`、symlink、特殊文件和账户根逃逸 | `rooted_fs.rs`、`storage.rs` | 保障 | 高 | 上传或下载可越出 `DATA_DIR` | symlink/rename race、FIFO、嵌套账户路径；当前发布会受控创建 hardlink，数据根须独占写权限 |
 | MED-U-020 | account storage paths 全局唯一且不得互相包含，保留 `uploads` 内部目录 | `admin.rs`、doctor | 保障 | 高 | 两个账户可能读写同一物理树 | equal/parent/child/reserved、并发管理变更 |
 | MED-U-021 | resource content 按授权 account 打开 blob，流式返回 Content-Length/MIME 和 encoding header | `resource_content` | 核心 | 高 | 无法恢复原始媒体，或可跨账户读取 | own/cross account、missing file、large stream、Content-Length |
@@ -202,7 +202,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 当前 Schema identity 为 media-backup 0.3.6、revision 3、SHA `d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 软件为 0.3.6，数据库 Schema identity 独立保持 media-backup 0.3.0、revision 3、SHA `d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-002 | Client 当前 Schema SHA 为 `fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558` | `client-core/database.rs` | 保障 | 高 | 手机队列状态不可证明 | Rust/Kotlin/Swift epoch 与 Schema identity |
 | MED-R-003 | 两个数据库都先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | 两个 `database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |

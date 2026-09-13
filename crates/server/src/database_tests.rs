@@ -1469,6 +1469,84 @@ async fn upload_commit_serializes_retries_and_deduplicates_concurrent_uploads() 
 }
 
 #[tokio::test]
+async fn committed_history_survives_resource_updates_and_is_not_a_recovery_scan() {
+    let workspace = TestWorkspace::new();
+    let (state, pool) = test_state(&workspace.database(), &workspace.data()).await;
+    let (account_id, device_id) = seed_account(&pool, "blobs/history", "history").await;
+
+    let first_upload =
+        seed_received_upload(&state, account_id, device_id, b"version-a", "history-a").await;
+    let first = upload_commit::complete(&state, first_upload, account_id)
+        .await
+        .expect("commit first resource version");
+    let (asset_id, mut first_request): (Uuid, Value) =
+        sqlx::query_as("SELECT asset_id, request FROM uploads WHERE id = ?")
+            .bind(first_upload)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    let second_upload =
+        seed_received_upload(&state, account_id, device_id, b"version-b", "history-b").await;
+    let mut second_request: Value = sqlx::query_scalar("SELECT request FROM uploads WHERE id = ?")
+        .bind(second_upload)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    second_request["source_asset_id"] = first_request["source_asset_id"].take();
+    second_request["source_resource_id"] = first_request["source_resource_id"].take();
+    let source_resource_id = second_request["source_resource_id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    sqlx::query(
+        "UPDATE uploads SET asset_id = ?, source_resource_id = ?, request = ? WHERE id = ?",
+    )
+    .bind(asset_id)
+    .bind(source_resource_id)
+    .bind(second_request)
+    .bind(second_upload)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let second = upload_commit::complete(&state, second_upload, account_id)
+        .await
+        .expect("commit replacement resource version");
+    assert_eq!(first.resource_id, second.resource_id);
+    let retried = upload_commit::complete(&state, first_upload, account_id)
+        .await
+        .expect("historical receipt remains independently verifiable");
+    assert_eq!(retried.resource_id, first.resource_id);
+
+    let first_object: String =
+        sqlx::query_scalar("SELECT commit_final_key FROM uploads WHERE id = ?")
+            .bind(first_upload)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    std::fs::write(
+        workspace.data().join(first_object),
+        b"corrupt only for scan detection",
+    )
+    .unwrap();
+    let report = upload_commit::reconcile_all(&state)
+        .await
+        .expect("crash recovery excludes terminal uploads");
+    assert_eq!(report.recovered, 0);
+    assert_eq!(report.marked_unknown, 0);
+    let states: Vec<String> =
+        sqlx::query_scalar("SELECT commit_state FROM uploads WHERE id IN (?1, ?2) ORDER BY id")
+            .bind(first_upload)
+            .bind(second_upload)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(states, vec!["committed", "committed"]);
+    close_test_state(state, pool).await;
+}
+
+#[tokio::test]
 async fn reconciler_never_accepts_same_size_different_content() {
     let workspace = TestWorkspace::new();
     let (state, pool) = test_state(&workspace.database(), &workspace.data()).await;

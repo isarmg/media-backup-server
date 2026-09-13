@@ -19,6 +19,8 @@ Internet -> HTTPS reverse proxy -> 127.0.0.1:8080 Media Backup
 
 ```bash
 revision="$(git rev-parse HEAD)"
+npm ci --prefix web
+npm run build --prefix web
 MEDIA_BACKUP_SOURCE_REVISION="$revision" cargo build --release --locked \
   -p media-backup-server --target x86_64-unknown-linux-gnu
 mkdir -p "$PWD/dist"
@@ -27,6 +29,10 @@ mkdir -p "$PWD/dist"
   "$revision" "$PWD/dist"
 ./scripts/test-deployment.sh "$PWD/dist/media-backup-server-0.3.6-x86_64-unknown-linux-gnu.tar.gz"
 ```
+
+`web/dist` 是 Rust 编译输入，不是可复用的维护者缓存；从干净 checkout 构建时必须先用锁文件生成。完成只
+表示归档通过身份和完整性检查，业务验收还必须由测试 Client 配对、上传一个测试文件、确认提交回执，并从
+服务端读取或校验该资源。不要使用真实用户媒体作为发行 smoke。
 
 Cargo release build script 拒绝其他 target；归档脚本还会核对构建主机为 Linux x86_64，并直接检查输入
 二进制为 64 位 little-endian x86_64 ELF。构建器拒绝覆盖输出。归档 manifest 固定产品、版本、40 位
@@ -117,13 +123,16 @@ media-backup-server doctor
 ```
 
 `reconcile scan` 与服务启动/120 秒周期使用同一协调路径和运行锁；它会重试未完成 upload commit、无引用
-blob rooted unlink/删行及 orphan commit staging 清理。永久删除响应 202 表示用户可见 metadata 已删除但
+blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期性重新 Hash 全部已完成历史 blob。
+完整内容校验属于显式 `doctor`；资源更新后，旧上传回执按不可变 `commit_blob_id` 验证，不要求资源当前
+指针仍指向旧版本。永久删除响应 202 表示用户可见 metadata 已删除但
 物理 blob 尚待该协调路径收口，不能盲目重放 DELETE；204 才表示本次已完成物理回收。指标只暴露聚合
 数量和字节数，使用独立 Bearer Token。
 
 ## 6. 当前数据库合同
 
-服务端 `product_metadata` 必须精确为 `application=media-backup`、`application_version=0.3.6`、
+服务端软件版本是 `0.3.6`，但数据库合同独立保持不变：`product_metadata` 必须精确为
+`application=media-backup`、`application_version=0.3.0`、
 `schema_revision=3`，Schema SHA-256 为
 `d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e`。移动队列对应
 `media-backup-client` 与 SHA-256
@@ -134,9 +143,12 @@ blob rooted unlink/删行及 orphan commit staging 清理。永久删除响应 2
 
 ## 7. 当前状态备份与恢复
 
-Media Backup 二进制不提供相关命令。停止服务后，由 `sarmg-upgrade` 把 SQLite 主文件及 sidecar 与
-`DATA_DIR` 作为同一一致性单元处理。遵循 3-2-1 策略，备份加密并定期在隔离环境执行完整恢复演练。
-恢复后先运行离线验证和 `doctor`，再开放流量。本轮不提供旧版本升级或历史格式读取。
+Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 的 Media Backup 支持矩阵只覆盖
+`0.2.0` / revision 1，**不支持**这里的 `0.3.0` / revision 3 数据库与配套 `DATA_DIR`，因此目前没有
+受支持的产品级备份/恢复命令。不得用旧适配器、只复制 SQLite 或手改 identity 来绕过这一缺口；生产上线
+前必须先为 `sarmg-upgrade` 增加并验证精确的 0.3.0/revision 3 状态适配器，使 SQLite 主文件、sidecar
+与 `DATA_DIR` 作为同一一致性单元处理。适配器可用后仍应执行加密 3-2-1 备份和隔离恢复演练，恢复后先
+运行离线验证与 `doctor` 再开放流量。
 
 ## 8. 移动端构建
 
@@ -150,7 +162,8 @@ Media Backup 二进制不提供相关命令。停止服务后，由 `sarmg-upgra
 3. 检查代理真实 peer、TLS、`TRUSTED_PROXY_CIDRS` 和客户端时间。
 4. 运行 `doctor`，区分数据库合同、文件系统、Hash 或上传恢复错误。
 5. 移动端检查系统权限、后台任务限制、本地队列和安全凭据存储。
-6. 若是版本/Schema 问题，停止服务并转交 `sarmg-upgrade`，不要加入兼容代码。
+6. 若是版本/Schema 问题，停止服务并先核对 `sarmg-upgrade` 的精确支持矩阵；当前 0.3.0/revision 3
+   不受支持，不能调用旧适配器，也不要把兼容代码加入 Server。
 
 移动 Client 的当前已知边界：`retry_wait` 到期会重新准备源文件，不会复用仍持久化的 `prepared_json`；
 若扫描器已按 `remove_source_after_prepare` 删除导出临时源，上传失败后可能持续报源不存在。准备失败或
