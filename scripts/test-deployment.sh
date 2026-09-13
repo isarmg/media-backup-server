@@ -4,7 +4,7 @@ set -euo pipefail
 readonly archive_arg="${1:-${MEDIA_BACKUP_RELEASE_ARCHIVE:-}}"
 readonly package="media-backup-server-0.3.6-x86_64-unknown-linux-gnu"
 readonly version="0.3.6"
-readonly contract="db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f"
+readonly contract="8da767f491221cace45297ae9f70e9526150c44ee5955635d47f98f654e807f3"
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly project_dir
 
@@ -82,7 +82,7 @@ assert identity["storage_encoding"] == "plain-v1"
 assert identity["server_schema_revision"] == 3
 assert identity["server_schema_sha256"] == "d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e"
 assert identity["web_assets_sha256"] == "d6d5c2783243a3774623c217c90ffb840727fce51435846400f6011fb1781e67"
-assert identity["release_contract_sha256"] == "db85a238cfa1ba85d0dbd8f3d3b43e6283a779c9d45438c09085a37a722b062f"
+assert identity["release_contract_sha256"] == "8da767f491221cace45297ae9f70e9526150c44ee5955635d47f98f654e807f3"
 PY
 source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
 verification="$($real_binary release-verify "$release_root")"
