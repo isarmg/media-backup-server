@@ -1,7 +1,7 @@
 {
   "name": "media-backup-web",
   "private": true,
-  "version": "0.3.10",
+  "version": "0.3.11",
   "type": "module",
   "engines": {
     "node": ">=26.7.0 <27"

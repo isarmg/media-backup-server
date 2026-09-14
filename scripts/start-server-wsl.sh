@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly release="/opt/isarmg/media-backup/releases/0.3.10"
+readonly release="/opt/isarmg/media-backup/releases/0.3.11"
 readonly binary="$release/bin/media-backup-server"
 readonly config="/etc/isarmg/media-backup.env"
 readonly unit="/etc/systemd/system/media-backup.service"
 readonly marker="# INITIAL-SECRETS-MUST-BE-REPLACED"
-readonly contract="d53e499df66d5213a47b628816227d0ccc7b64b12d1db116c582b4ec14389512"
+readonly contract="149df1adfc1d1bd6f57862dc0f50c3d42d25ebd5233edffbb3b874e6b676f388"
 
 fail() {
   printf 'start error: %s\n' "$*" >&2
@@ -32,7 +32,7 @@ verify_installed_release() {
   [[ "$output" != *$'\n'* ]] || fail "release verifier returned multiple lines"
   IFS=$'\t' read -r line_marker product version revision target fingerprint extra <<<"$output"
   [[ -z "${extra:-}" && "$line_marker" == "MEDIA_BACKUP_RELEASE_VERIFIED_V1" &&
-    "$product" == "media-backup-server" && "$version" == "0.3.10" &&
+    "$product" == "media-backup-server" && "$version" == "0.3.11" &&
     "$revision" =~ ^[0-9a-f]{40}$ && "$target" == "x86_64-unknown-linux-gnu" &&
     "$fingerprint" == "$contract" ]] || fail "installed release returned an unexpected identity"
   [[ -f "$unit" && ! -L "$unit" && "$(stat -c '%a:%u:%g:%h' -- "$unit")" == "644:0:0:1" ]] ||

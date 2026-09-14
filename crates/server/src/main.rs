@@ -273,8 +273,8 @@ mod command_tests {
         assert_eq!(parse(&[]).unwrap(), Command::Serve);
         assert_eq!(parse(&["serve"]).unwrap(), Command::Serve);
         assert_eq!(
-            parse(&["serve-release", "/opt/isarmg/media-backup/releases/0.3.10"]).unwrap(),
-            Command::ServeRelease(PathBuf::from("/opt/isarmg/media-backup/releases/0.3.10"))
+            parse(&["serve-release", "/opt/isarmg/media-backup/releases/0.3.11"]).unwrap(),
+            Command::ServeRelease(PathBuf::from("/opt/isarmg/media-backup/releases/0.3.11"))
         );
         assert_eq!(parse(&["doctor"]).unwrap(), Command::Doctor);
         assert_eq!(
@@ -286,17 +286,17 @@ mod command_tests {
             Command::ReleaseIdentity
         );
         assert_eq!(
-            parse(&["release-verify", "/opt/isarmg/media-backup/releases/0.3.10"]).unwrap(),
-            Command::ReleaseVerify(PathBuf::from("/opt/isarmg/media-backup/releases/0.3.10"))
+            parse(&["release-verify", "/opt/isarmg/media-backup/releases/0.3.11"]).unwrap(),
+            Command::ReleaseVerify(PathBuf::from("/opt/isarmg/media-backup/releases/0.3.11"))
         );
         assert_eq!(
             parse(&[
                 "release-verify-installed",
-                "/opt/isarmg/media-backup/releases/0.3.10"
+                "/opt/isarmg/media-backup/releases/0.3.11"
             ])
             .unwrap(),
             Command::ReleaseVerifyInstalled(PathBuf::from(
-                "/opt/isarmg/media-backup/releases/0.3.10"
+                "/opt/isarmg/media-backup/releases/0.3.11"
             ))
         );
         assert!(parse(&["backup", "create"]).is_err());
