@@ -6,7 +6,7 @@ readonly binary="$release/bin/media-backup-server"
 readonly config="/etc/isarmg/media-backup.env"
 readonly unit="/etc/systemd/system/media-backup.service"
 readonly marker="# INITIAL-SECRETS-MUST-BE-REPLACED"
-readonly contract="8da767f491221cace45297ae9f70e9526150c44ee5955635d47f98f654e807f3"
+readonly contract="5fa62beb0bef2a9234f8707c146f24546fc6a60391ac92473042335a40557257"
 
 fail() {
   printf 'run error: %s\n' "$*" >&2

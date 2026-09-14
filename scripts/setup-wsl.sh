@@ -4,7 +4,7 @@ set -euo pipefail
 readonly product="media-backup-server"
 readonly version="0.3.6"
 readonly target="x86_64-unknown-linux-gnu"
-readonly release_contract_sha256="8da767f491221cace45297ae9f70e9526150c44ee5955635d47f98f654e807f3"
+readonly release_contract_sha256="5fa62beb0bef2a9234f8707c146f24546fc6a60391ac92473042335a40557257"
 readonly service_user="isarmg-media"
 readonly service_group="isarmg-media"
 readonly app_dir="/opt/isarmg/media-backup"
@@ -162,8 +162,8 @@ expected_identity = {
     "storage_encoding": "plain-v1",
     "server_schema_revision": 3,
     "server_schema_sha256": "d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e",
-    "web_assets_sha256": "d6d5c2783243a3774623c217c90ffb840727fce51435846400f6011fb1781e67",
-    "release_contract_sha256": "8da767f491221cace45297ae9f70e9526150c44ee5955635d47f98f654e807f3",
+    "web_assets_sha256": "8a56e8105830e45516c527c6ebec2bc998fc9b92c0f6a274f0102bac36863ee1",
+    "release_contract_sha256": "5fa62beb0bef2a9234f8707c146f24546fc6a60391ac92473042335a40557257",
 }
 expected_directories = {
     "bin", "config", "docs", "scripts", "share", "share/web",
