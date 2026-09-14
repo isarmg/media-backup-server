@@ -697,7 +697,7 @@ mod tests {
         );
         assert_eq!(
             identity.release_contract_sha256,
-            "4fe8ac61678f386b82143d73dc2225d863132d57b1ef7a3dbcbbaf98e759f30b"
+            "375da139b67519a8a404eb682429c311e874f5ed6eb15c16cb01de8ea7a20701"
         );
     }
 
