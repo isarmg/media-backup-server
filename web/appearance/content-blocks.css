@@ -20,9 +20,6 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   background: var(--sarmg-bg-page);
   body { margin: 0; }
   .sarmg-shell-layout--full { grid-template-columns: minmax(0, 1fr); }
-  .sarmg-instance-workspace { display: grid; grid-template-columns: 17rem minmax(0, 1fr); gap: 24px; align-items: start; }
-  .sarmg-instance-workspace--full { grid-template-columns: minmax(0, 1fr); }
-  .sarmg-instance-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 0 16px; }
   .sarmg-header-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; flex-shrink: 0; }
   .sarmg-header-actions button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; min-height: 44px; line-height: 1; }
   .sarmg-admin-shell > .sarmg-page-header { flex-wrap: nowrap; gap: 8px; }
@@ -38,27 +35,10 @@ html:not([data-sarmg-appearance]), html[data-sarmg-appearance="content-blocks"] 
   .sarmg-header-navigation a { text-decoration: none; border-radius: 0; }
   .sarmg-header-actions svg { width: var(--sarmg-header-icon-size, 1em); height: var(--sarmg-header-icon-size, 1em); }
   &:not([data-sarmg-selection="custom"]) .sarmg-header-navigation [aria-current="page"] { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; }
-  .sarmg-native-workspace { margin: var(--sarmg-content-spacing); }
-  .sarmg-native-workspace > .main { margin: 0; min-width: 0; padding: var(--sarmg-content-spacing); border-radius: 20px; background: var(--sarmg-bg-panel); }
-  .sarmg-instance-list a { padding: .5rem .75rem; overflow-wrap: anywhere; }
-  &:not([data-sarmg-selection="custom"]) :is(.sarmg-navigation a[aria-current="page"], .sarmg-button[aria-pressed="true"], .sarmg-instance-list [aria-current="page"]) { background: transparent; color: var(--sarmg-text-primary); box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
-  .sarmg-instance-sidebar { display: grid; align-content: start; gap: 12px; min-width: 0; position: sticky; top: 16px; max-height: calc(100dvh - 100px); overflow-y: auto; }
-  .sarmg-instance-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
-  .sarmg-instance-list .sarmg-button { text-align: start; display: grid; gap: 4px; width: 100%; overflow-wrap: anywhere; color: var(--sarmg-text-primary); }
-  .sarmg-instance-list .sarmg-button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .sarmg-instance-workspace .sarmg-button[aria-pressed] { color: var(--sarmg-text-primary); }
-  &:not([data-sarmg-selection="custom"]) .sarmg-instance-workspace .sarmg-button[aria-pressed="true"] { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
-  .sarmg-instance-detail { min-width: 0; display: grid; gap: var(--sarmg-content-spacing); }
-  .sarmg-instance-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
-  .sarmg-instance-detail dd { margin: 0; overflow-wrap: anywhere; }
+  &:not([data-sarmg-selection="custom"]) :is(.sarmg-navigation a[aria-current="page"], .sarmg-button[aria-pressed="true"]) { background: transparent; color: var(--sarmg-text-primary); box-shadow: none; text-decoration: underline; text-underline-offset: .25em; text-decoration-thickness: 1px; }
   @media (max-width: 360px) {
     .sarmg-header-actions { gap: 2px; }
   }
-  @media (max-width: 48rem) {
-    .sarmg-instance-workspace { grid-template-columns: minmax(0, 1fr); }
-    .sarmg-instance-sidebar { position: static; max-height: 40dvh; padding: 4px; }
-  }
-
   &[data-theme="dark"] {
     color-scheme: dark;
     --sarmg-bg-page: #151a1d;

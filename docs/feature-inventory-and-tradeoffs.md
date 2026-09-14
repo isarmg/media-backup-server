@@ -1,6 +1,6 @@
 # Media Backup 完整功能与取舍清单
 
-本文按 Media Backup `0.3.8` 当前工作树盘点 Server、React 管理 Web、共享 Rust Client、Android、iOS、
+本文按 Media Backup `0.3.9` 当前工作树盘点 Server、React 管理 Web、共享 Rust Client、Android、iOS、
 协议、存储和交付闭包。代码、两个 `current_schema.sql`、移动 epoch、FFI header 和发行 manifest 是最终
 事实源；本文不把规划中的能力写成已实现功能。
 
@@ -45,18 +45,18 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-P-001 | Android/iOS 把授权范围内的照片、视频和设备生成缩略图备份到自托管 Server | `clients/android`、`clients/ios`、`crates/server` | 核心 | 高 | 项目不再是完整移动媒体备份系统 | 两平台至少一条原始媒体+缩略图端到端 |
 | MED-P-002 | Server 唯一支持 `x86_64-unknown-linux-gnu`，正式主机唯一为 Linux AMD64 | `sarmg-server-target`、server `build.rs`、release/systemd/scripts | 保障 | 高 | 会产生未经验证的 Server 平台制品 | 非目标编译、错误 ELF、错误 uname、systemd architecture |
 | MED-P-003 | Android/iOS 客户端继续按各自平台架构构建；“Server 仅 AMD64”不限制移动 ABI | Android NDK targets、Apple targets | 核心 | 高 | 若误删移动架构，真机无法加载 Rust core | arm64 Android/iOS；模拟器；ABI/header 一致 |
-| MED-P-004 | Server、移动 Client 和发行物只理解一个当前 `0.3.8` 身份 | metadata、mobile epoch、release identity | 保障 | 高 | 多代 parser 会扩大每次变更的状态矩阵 | 非当前 product/version/revision/epoch 零写入拒绝 |
+| MED-P-004 | Server、移动 Client 和发行物只理解一个当前 `0.3.9` 身份 | metadata、mobile epoch、release identity | 保障 | 高 | 多代 parser 会扩大每次变更的状态矩阵 | 非当前 product/version/revision/epoch 零写入拒绝 |
 | MED-P-005 | 产品不内置迁移、备份或恢复数据库命令；代际任务属于 `sarmg-upgrade` | Server CLI、Client open path | 保障 | 高 | 在线转换会把未知状态带入服务进程 | CLI 清单；Schema mismatch 只读失败 |
 | MED-P-006 | 源配置统一位于顶层 `config/`，部署资产位于 `deploy/`，客户端位于 `clients/` | 仓库目录 | 开发运维 | 低 | 事实源散落，脚本和文档容易引用不同文件 | `rg` 不引用已移除目录；release 仍可重映射到 `systemd/` |
 | MED-P-007 | React/Vite 管理客户端位于 `web/`；Android/iOS 原生客户端并列 | 目录结构、workspace scripts | 开发运维 | 低 | 客户端代码位置不一致，维护人员难以识别边界 | README、CI、构建脚本使用统一路径 |
 | MED-P-008 | 原始媒体在 Server 使用 `plain-v1` 明文字节，传输机密性依赖 HTTPS | `StorageEncoding::PlainV1`、`crates/crypto` | 核心 | 高 | 改成端到端密文会重写缩略图、恢复、去重和密钥生命周期 | byte-for-byte round trip；HTTP 明文直连不得公网暴露 |
-| MED-P-009 | Server Rust 和八个 Web 包已固定正式 Foundation 0.7.11 的完整 Git revision、Release URL 与 lock integrity，无相邻工作区来源 | Cargo、八个 `@sarmg/*` 依赖、manifest/lock | 保障 | 高 | 平台行为分叉；独立构建通过不代表主分支改动已纳入产品 Release | [独立 CI 与消费者证据](https://github.com/isarmg/sarmg-foundation-server/blob/main/consumers/axum-0.7.0-evidence.md)；后续更新仍须复验锁图和发行身份 |
+| MED-P-009 | Server Rust 和八个 Web 包已固定正式 Foundation 0.8.1 的完整 Git revision、Release URL 与 lock integrity，无相邻工作区来源 | Cargo、八个 `@sarmg/*` 依赖、manifest/lock | 保障 | 高 | 平台行为分叉；独立构建通过不代表主分支改动已纳入产品 Release | [独立 CI 与消费者证据](https://github.com/isarmg/sarmg-foundation-server/blob/main/consumers/axum-0.7.0-evidence.md)；后续更新仍须复验锁图和发行身份 |
 
 ## 3. 身份、认证与请求边界
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-A-001 | 控制面只有 Administrator，平台表由 Foundation Composer 生成 | `_sarmg_administrators`、Admin Core | 核心 | 高 | 删除认证会公开备份用户与路径 | Session 固定 admin；无产品管理员表 |
+| MED-A-001 | 控制面只有 Administrator，平台表由 Foundation Composer 生成 | `_sarmg_administrators`、Admin Core | 核心 | 高 | 删除认证会公开备份实例与路径 | Session 固定 admin；无产品管理员表 |
 | MED-A-002 | 仅无管理员时使用 BOOTSTRAP_ADMIN_USERNAME/PASSWORD 初始化；已有身份不被环境覆盖 | `build_state`、Admin Core | 保障 | 高 | 环境变量不能隐式重置账户 | 空库要求密码；已有管理员保持不变 |
 | MED-A-003 | Administrator username 使用 Foundation 唯一 canonical 规则：登录 candidate 1..64 printable ASCII，经 trim ASCII + lowercase 后必须为 3..64 bytes、首尾字母数字、字符仅 `[a-z0-9._-]` | `normalize_administrator_username`、`require_canonical_administrator_username`、Schema CHECK | 保障 | 中 | 同一身份可用大小写/空白变体绕过限流或唯一约束，跨项目身份语义会漂移 | 大小写/首尾空白正例；`@`、Unicode、内部空白、控制字符、首尾分隔符和超长负例 |
 | MED-A-004 | 管理员密码只接受 Foundation 当前 Argon2id 策略 | Admin Core、Admin Auth | 保障 | 高 | 产品不能另设 hash 分支 | PHC 参数与口令策略负例 |
@@ -70,7 +70,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-A-012 | 写管理请求要求单个 CSRF、同源 Origin 与单一 Host/URI authority | Foundation Axum Adapter | 保障 | 高 | 禁止跨站和重复头歧义 | 共享 Axum/Hyper 套件 |
 | MED-A-013 | 生产 Cookie 为 __Host-sarmg-media-backup-session，Secure/HttpOnly/SameSite=Strict/Path=/ | Foundation session_set_cookie | 保障 | 低 | 不提供产品 Cookie 别名 | 精确属性与 loopback 开发模式 |
 | MED-A-015 | 数据面 accounts 与管理面 _sarmg_administrators 完全分离 | 产品移动授权、Foundation 管理授权 | 核心 | 高 | 同名账户不共享凭据或权限 | 移动 /v2 与管理 /api/v2 分域 |
-| MED-A-016 | 管理员为每个实例创建一个长期授权码；Server 保存经实例 ID 绑定的信封密文和独立摘要。bootstrap 只接受待配对实例的授权码并签发随机 Bearer token；轮换立即清除旧 token | `routes::bootstrap`、`admin.rs`、`crypto.rs`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；明文库泄漏扩大 | 正误授权码、取消/删除、轮换、disabled account、token digest、设备 audit |
+| MED-A-016 | 管理员通过 `/api/v2/admin/instances` 只提交名称；Server 在同一事务中创建自动分配的内部 account 隔离边界、100 GiB 默认配额、device 和长期授权码，不暴露“先建用户再建实例”的流程。授权码保存为经实例 ID 绑定的信封密文和独立摘要；bootstrap 只接受待配对授权码并签发随机 Bearer token，轮换立即清除旧 token | `routes::bootstrap`、`admin.rs`、`crypto.rs`、`accounts`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；部分创建会留下孤立归属；明文库泄漏扩大 | strict name-only DTO、默认值、原子创建、正误授权码、取消/删除、轮换、disabled account、token digest、设备 audit |
 | MED-A-017 | 移动业务 API 接受 device token 或未撤销 API Key，解析到同一 account/device context | `auth::require_auth` | 核心 | 高 | 无法授权上传，或两个 token 类型产生不同隔离语义 | device/API key、revoked、disabled、跨账户 |
 | MED-A-018 | API Key 原值只在创建响应出现一次，库中存 hash/prefix，可列出和撤销 | `api_access.rs`、`api_keys` | 建议保留 | 高 | 自动化/额外客户端只能保存设备 token；明文保存会泄漏 | 创建、列表不含 token、撤销、last_used |
 | MED-A-019 | `/metrics` 使用与其他身份分离的可选 Bearer `METRICS_TOKEN` | `metrics.rs`、Config | 保障 | 中 | 聚合容量可被公开，或监控被迫保存 Administrator Cookie | 无/错/对 token；空配置语义 |
@@ -187,9 +187,9 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
 | MED-W-001 | Foundation Shell 统一 restore/login/logout、导航、通知与诊断，Session/CSRF 只在内存；产品没有第二套登录状态机 | `createSarmgAdminApplication`、`@sarmg/admin-shell` | 保障 | 高 | 认证竞态或 Secret 持久化 | 共享 Shell 测试、消费者 Chromium/Firefox 验收 |
-| MED-W-002 | 统一实例列表、详细信息和日志视图；管理员账号仅由 Foundation Shell 右上角人物图标设置；业务读取失败清除旧数据，安全错误显示 Request ID 和显式重试 | `Application`、`OverviewView`、`UsersView`、`LogsView` | 建议保留 | 中 | 账户域混淆或失败后仍显示过期状态 | 切页、失败/重试、账号设置、无内部错误泄漏 |
-| MED-W-003 | 总览聚合 active/total user、used/pending/quota 和每用户设备/resource 数 | `/api/v2/admin/overview`、Overview guard | 建议保留 | 中 | 容量和账户状态只能手工查询 | unlimited quota、large safe integer、空库 |
-| MED-W-004 | 创建/修改备份账户及其客户端实例，停用需确认；实例授权码可查看、轮换、取消并在终态删除；GiB 配额往返保留原始整数字节 | `BackupUserForm`、`InstanceManager` | 核心 | 高 | 部分成功被误报、重复写入或授权未真正撤销 | create/edit/disable、实例配对/轮换/删除、精确 quota |
+| MED-W-002 | 统一实例列表、详细信息和日志视图；管理员账号仅由 Foundation Shell 右上角人物图标设置；业务读取失败清除旧数据，安全错误显示 Request ID 和显式重试 | `Application`、`OverviewView`、`UsersView`、`LogsView` | 建议保留 | 中 | 身份域混淆或失败后仍显示过期状态 | 切页、失败/重试、账号设置、无内部错误泄漏 |
+| MED-W-003 | 总览聚合 active/total instance、used/pending/quota 和每实例资源数 | `/api/v2/admin/overview`、Overview guard | 建议保留 | 中 | 容量和实例状态只能手工查询 | unlimited quota、large safe integer、空库 |
+| MED-W-004 | 新建表单与 Host/Sunshine 一致只填写实例名称，原子创建自动存储、默认配额和客户端授权码，不显示内部账号；停用需确认，授权码可查看、轮换、取消并在终态删除整个空实例；GiB 配额在详情页编辑并保留原始整数字节 | `CreateBackupInstanceDialog`、`BackupUserForm`、`InstanceManager` | 核心 | 高 | 首次配对重新暴露基础设施参数、部分成功留下孤立归属或授权未真正撤销 | name-only create、默认值、edit/disable、实例配对/轮换/删除、精确 quota |
 | MED-W-005 | 业务 JSON 在进入组件前校验必需字段与类型，路径只允许 `/api/v2/admin/*` | `web/src/api.ts` | 保障 | 中 | 漂移响应会进入组件，或产品 client 被用于移动路由 | 缺失/错误类型、错误 prefix；当前 guard 容忍响应额外字段 |
 | MED-W-006 | Foundation 统一 system/light/dark 主题；产品不读写浏览器存储 | Shell 主题选择器 | 可选 | 低 | 私有外观与平台漂移 | 移动明暗主题 WCAG AA、无横向溢出 |
 | MED-W-007 | Foundation tokens/reset/accessibility 提供 focus、reduced motion、forced colors 基线 | CSS imports、`data-sarmg-scope` | 保障 | 中 | 基础行为跨项目漂移 | keyboard、focus、high contrast、CSS digest |
@@ -202,7 +202,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 软件为 0.3.8，数据库 Schema identity 为 media-backup 0.3.0、revision 4、SHA `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 软件为 0.3.9，数据库 Schema identity 为 media-backup 0.3.0、revision 4、SHA `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-002 | Client 当前 Schema SHA 为 `fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558` | `client-core/database.rs` | 保障 | 高 | 手机队列状态不可证明 | Rust/Kotlin/Swift epoch 与 Schema identity |
 | MED-R-003 | 两个数据库都先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | 两个 `database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |
@@ -216,7 +216,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-R-012 | `build-server-release.sh` 只在 Linux AMD64 接受 64-bit little-endian x86_64 ELF | release script | 开发运维 | 中 | 文件名 target 与真实 ELF 可不一致 | ELF magic/class/endian/machine、wrong host |
 | MED-R-013 | 发行包包含 binary、配置样例、`deploy/media-backup.service` 映射出的 systemd、脚本、Web、FFI header 和必要文档 | build script | 开发运维 | 高 | 操作者拿到不完整或跨代部署单元 | expected exact layout、真实 verify-release |
 | MED-R-014 | systemd 使用 `isarmg-media`、flat `/etc/isarmg/media-backup.env`、ConditionArchitecture 和 sandbox | `deploy/media-backup.service` | 保障 | 高 | 错服务账号、配置路径或权限扩大主机攻击面 | `systemd-analyze verify`、实际 start、write paths |
-| MED-R-015 | 安装 no-clobber 固定 `/opt/isarmg/media-backup/releases/0.3.8`，环境 0600 | `setup-wsl.sh`、deployment tests | 保障 | 高 | 同版本覆盖会让运行内容不可追溯，Secret 权限过宽 | 首装/二次安装、concurrent、mode/owner |
+| MED-R-015 | 安装 no-clobber 固定 `/opt/isarmg/media-backup/releases/0.3.9`，环境 0600 | `setup-wsl.sh`、deployment tests | 保障 | 高 | 同版本覆盖会让运行内容不可追溯，Secret 权限过宽 | 首装/二次安装、concurrent、mode/owner |
 | MED-R-016 | CI 分别覆盖 Rust/Server release、Android、iOS 和移动静态合同 | `.github/workflows`、contract scripts | 开发运维 | 高 | 任一平台可在 wire/FFI 漂移时独立发布 | clean checkout jobs、平台矩阵、lock mode |
 | MED-R-017 | Rust 固定 1.98.0；Web Node/toolchain 与 Cargo/npm locks 均固定 | toolchain/version/lock files | 开发运维 | 中 | 解析随时间变化，制品难复现 | `--locked`、`npm ci`、version output |
 | MED-R-018 | 中文 README、学习、流程、功能取舍和运维文档是发行/维护闭包 | `README.md`、`docs/` | 开发运维 | 低 | 跨五种语言/平台的知识只能口头传递 | 链接、命令、代码锚点和 schema hash 抽查 |
@@ -280,5 +280,5 @@ Server 与 Client 在打开状态前先验证唯一当前 Schema 和身份。发
 ## 图库扩展实施补充
 
 本次新增全库类型/日期/设备筛选、UUID 快照水位、资产/资源/标签批量 SQL、1600 像素派生预览，
-以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API 扩展](https://github.com/isarmg/media-backup-server/blob/v0.3.8/docs/gallery-api.md)。
+以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API 扩展](https://github.com/isarmg/media-backup-server/blob/v0.3.9/docs/gallery-api.md)。
 移动实现以 Client 0.4.0 的实施记录为准，本文原移动端清单描述的是改造前快照。

@@ -465,7 +465,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         .to_owned();
     let mut missing_csrf = json_request(
         Method::POST,
-        "/api/v2/admin/users",
+        "/api/v2/admin/instances",
         json!({}),
         None,
         Some((&admin_cookie, &admin_csrf)),
@@ -477,11 +477,11 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         &app,
         json_request(
             Method::POST,
-            "/api/v2/admin/users",
+            "/api/v2/admin/instances",
             json!({
                 "username": "loose-admin-created-user",
                 "password": PASSWORD,
-                "display_name": "Loose Admin DTO",
+                "name": "Loose Admin DTO",
                 "storage_path": "blobs/loose-admin-dto",
                 "quota_bytes": 1,
                 "enabled": true,
@@ -502,25 +502,75 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
     );
     assert_eq!(storage_snapshot(&workspace.data()), empty_storage);
 
-    for (index, invalid_storage_path) in [
-        "/tmp/media-backup-outside",
-        "../media-backup-outside",
-        "blobs//invalid",
-        "uploads/account",
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    let created_instance = json_body(
         send(
             &app,
             json_request(
                 Method::POST,
-                "/api/v2/admin/users",
+                "/api/v2/admin/instances",
+                json!({"name": "Media Owner"}),
+                None,
+                Some((&admin_cookie, &admin_csrf)),
+            ),
+            StatusCode::CREATED,
+        )
+        .await,
+    )
+    .await;
+    let instance_id = Uuid::from_str(
+        created_instance["id"]
+            .as_str()
+            .expect("created instance id"),
+    )
+    .expect("valid instance id");
+    let account_id: Uuid = sqlx::query_scalar("SELECT account_id FROM devices WHERE id=?")
+        .bind(instance_id)
+        .fetch_one(&pool)
+        .await
+        .expect("created instance account");
+    let storage_path: String = sqlx::query_scalar("SELECT storage_path FROM accounts WHERE id=?")
+        .bind(account_id)
+        .fetch_one(&pool)
+        .await
+        .expect("created instance storage path");
+    let generated_username: String = sqlx::query_scalar("SELECT username FROM accounts WHERE id=?")
+        .bind(account_id)
+        .fetch_one(&pool)
+        .await
+        .expect("created internal storage identity");
+    assert!(generated_username.starts_with("instance-"));
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT quota_bytes FROM accounts WHERE id=?")
+            .bind(account_id)
+            .fetch_one(&pool)
+            .await
+            .expect("default instance quota"),
+        100 * 1024 * 1024 * 1024_i64
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM devices")
+            .fetch_one(&pool)
+            .await
+            .expect("count atomically created devices"),
+        1
+    );
+
+    for invalid_storage_path in [
+        "/tmp/media-backup-outside",
+        "../media-backup-outside",
+        "blobs//invalid",
+        "uploads/account",
+    ] {
+        send(
+            &app,
+            json_request(
+                Method::PUT,
+                format!("/api/v2/admin/users/{account_id}"),
                 json!({
-                    "username": format!("invalid-path-{index}"),
-                    "display_name": "Invalid Storage Path",
+                    "username": generated_username,
+                    "display_name": "Media Owner",
                     "storage_path": invalid_storage_path,
-                    "quota_bytes": 1,
+                    "quota_bytes": 10_000_000,
                     "enabled": true
                 }),
                 None,
@@ -531,78 +581,13 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         .await;
     }
 
-    let created_account = json_body(
-        send(
-            &app,
-            json_request(
-                Method::POST,
-                "/api/v2/admin/users",
-                json!({
-                    "username": USERNAME,
-                    "display_name": "Media Owner",
-                    "storage_path": "",
-                    "quota_bytes": 10_000_000,
-                    "enabled": true
-                }),
-                None,
-                Some((&admin_cookie, &admin_csrf)),
-            ),
-            StatusCode::OK,
-        )
-        .await,
-    )
-    .await;
-    let account_id = Uuid::from_str(created_account["id"].as_str().expect("created account id"))
-        .expect("valid account id");
-    let storage_path = created_account["storage_path"]
-        .as_str()
-        .expect("created account storage path")
-        .to_owned();
-
-    send(
-        &app,
-        json_request(
-            Method::POST,
-            "/api/v2/admin/users",
-            json!({
-                "username": "nested-storage-owner",
-                "display_name": "Nested Storage Owner",
-                "storage_path": format!("{storage_path}/nested"),
-                "quota_bytes": 1,
-                "enabled": true
-            }),
-            None,
-            Some((&admin_cookie, &admin_csrf)),
-        ),
-        StatusCode::CONFLICT,
-    )
-    .await;
-
-    send(
-        &app,
-        json_request(
-            Method::POST,
-            "/api/v2/admin/users",
-            json!({
-                "username": USERNAME,
-                "display_name": "Duplicate",
-                "storage_path": "blobs/duplicate",
-                "quota_bytes": 1,
-                "enabled": true
-            }),
-            None,
-            Some((&admin_cookie, &admin_csrf)),
-        ),
-        StatusCode::CONFLICT,
-    )
-    .await;
     send(
         &app,
         json_request(
             Method::PUT,
             format!("/api/v2/admin/users/{account_id}"),
             json!({
-                "username": USERNAME,
+                "username": generated_username,
                 "display_name": "Media Owner Updated",
                 "storage_path": storage_path,
                 "quota_bytes": 10_000_000,
@@ -615,19 +600,16 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
     )
     .await;
 
-    let created_instance = json_body(
-        send(
-            &app,
-            json_request(
-                Method::POST,
-                format!("/api/v2/admin/users/{account_id}/instances"),
-                json!({"name": "Test Phone"}),
-                None,
-                Some((&admin_cookie, &admin_csrf)),
-            ),
-            StatusCode::OK,
-        )
-        .await,
+    send(
+        &app,
+        json_request(
+            Method::POST,
+            "/api/v2/admin/users",
+            json!({"name": "Removed two-step account creation"}),
+            None,
+            Some((&admin_cookie, &admin_csrf)),
+        ),
+        StatusCode::NOT_FOUND,
     )
     .await;
     send(
@@ -635,13 +617,81 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         json_request(
             Method::POST,
             format!("/api/v2/admin/users/{account_id}/instances"),
-            json!({"name": "Second Phone"}),
+            json!({"name": "Removed second creation step"}),
+            None,
+            Some((&admin_cookie, &admin_csrf)),
+        ),
+        StatusCode::NOT_FOUND,
+    )
+    .await;
+    let disposable = json_body(
+        send(
+            &app,
+            json_request(
+                Method::POST,
+                "/api/v2/admin/instances",
+                json!({"name": "Disposable Instance"}),
+                None,
+                Some((&admin_cookie, &admin_csrf)),
+            ),
+            StatusCode::CREATED,
+        )
+        .await,
+    )
+    .await;
+    let disposable_id = Uuid::from_str(disposable["id"].as_str().expect("disposable instance id"))
+        .expect("valid disposable instance id");
+    let disposable_account_id: Uuid =
+        sqlx::query_scalar("SELECT account_id FROM devices WHERE id=?")
+            .bind(disposable_id)
+            .fetch_one(&pool)
+            .await
+            .expect("disposable account id");
+    let disposable_username: String =
+        sqlx::query_scalar("SELECT username FROM accounts WHERE id=?")
+            .bind(disposable_account_id)
+            .fetch_one(&pool)
+            .await
+            .expect("disposable internal username");
+    send(
+        &app,
+        json_request(
+            Method::PUT,
+            format!("/api/v2/admin/users/{disposable_account_id}"),
+            json!({
+                "username": disposable_username,
+                "display_name": "Disposable Instance",
+                "storage_path": format!("{storage_path}/nested"),
+                "quota_bytes": 1,
+                "enabled": true
+            }),
             None,
             Some((&admin_cookie, &admin_csrf)),
         ),
         StatusCode::CONFLICT,
     )
     .await;
+    for expected_accounts in [2_i64, 1_i64] {
+        send(
+            &app,
+            json_request(
+                Method::DELETE,
+                format!("/api/v2/admin/instances/{disposable_id}"),
+                json!({}),
+                None,
+                Some((&admin_cookie, &admin_csrf)),
+            ),
+            StatusCode::NO_CONTENT,
+        )
+        .await;
+        assert_eq!(
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM accounts")
+                .fetch_one(&pool)
+                .await
+                .expect("instance lifecycle account count"),
+            expected_accounts
+        );
+    }
     let bootstrap = json_body(
         send(
             &app,

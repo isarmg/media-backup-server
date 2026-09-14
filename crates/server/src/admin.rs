@@ -16,12 +16,8 @@ use crate::{error::AppError, routes::AppState};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct CreateUserRequest {
-    username: String,
-    display_name: String,
-    storage_path: String,
-    quota_bytes: i64,
-    enabled: bool,
+pub(crate) struct CreateInstanceRequest {
+    name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -63,12 +59,6 @@ pub(crate) struct AdminInstance {
     authorization_code: String,
     created_at: String,
     last_seen_at: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct CreateInstanceRequest {
-    name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -150,27 +140,33 @@ pub(crate) async fn logs(State(state): State<AppState>) -> Result<Json<Vec<Admin
     ))
 }
 
-pub(crate) async fn create_user(
+pub(crate) async fn create_instance(
     State(state): State<AppState>,
-    Json(request): Json<CreateUserRequest>,
-) -> Result<Json<AdminUser>, AppError> {
+    Json(request): Json<CreateInstanceRequest>,
+) -> Result<(StatusCode, Json<AdminInstance>), AppError> {
+    let account_id = Uuid::new_v4();
     let id = Uuid::new_v4();
-    let username = request.username.trim();
-    let display_name = request.display_name.trim();
-    let storage_path = if request.storage_path.trim().is_empty() {
-        format!("blobs/{id}")
-    } else {
-        request.storage_path.trim().to_owned()
-    };
-    validate_username(username)?;
-    validate_policy(display_name, &storage_path, request.quota_bytes)?;
-    ensure_unique_username(&state, username, None).await?;
+    let name = request.name.trim();
+    let storage_path = format!("blobs/{account_id}");
+    let quota_bytes = 100 * 1024 * 1024 * 1024_i64;
+    validate_policy(name, &storage_path, quota_bytes)?;
     ensure_unique_path(&state, &storage_path, None).await?;
     state.storage.validate_account_path(&storage_path).await?;
-    sqlx::query("INSERT INTO accounts(id,username,display_name,storage_path,quota_bytes,enabled,created_at) VALUES(?,?,?,?,?,?,datetime('now'))")
-        .bind(id).bind(username).bind(display_name).bind(&storage_path)
-        .bind(request.quota_bytes).bind(request.enabled).execute(&state.pool).await?;
-    Ok(Json(load_user(&state, id).await?))
+    let code = random_authorization_code();
+    let encrypted = state
+        .secrets
+        .encrypt_client_authorization(&id.to_string(), &code)?;
+    let hash = Sha256::digest(code.as_bytes()).to_vec();
+    let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let username = format!("instance-{}", account_id.simple());
+    sqlx::query("INSERT INTO accounts(id,username,display_name,storage_path,quota_bytes,enabled,created_at) VALUES(?,?,?,?,?,1,datetime('now'))")
+        .bind(account_id).bind(username).bind(name).bind(&storage_path)
+        .bind(quota_bytes).execute(&mut *transaction).await?;
+    sqlx::query("INSERT INTO devices(id,account_id,name,platform,token_hash,authorization_code_hash,authorization_code_enc,pairing_status,created_at,last_seen_at) VALUES(?,?,?,'unknown',NULL,?,?,'pending',datetime('now'),NULL)")
+        .bind(id).bind(account_id).bind(name).bind(hash).bind(encrypted).execute(&mut *transaction).await?;
+    write_instance_audit(&mut transaction, account_id, id, "device.instance.create").await?;
+    transaction.commit().await?;
+    Ok((StatusCode::CREATED, load_instance(&state, id).await?))
 }
 
 pub(crate) async fn update_user(
@@ -186,55 +182,20 @@ pub(crate) async fn update_user(
     ensure_unique_username(&state, username, Some(id)).await?;
     ensure_unique_path(&state, storage_path, Some(id)).await?;
     state.storage.validate_account_path(storage_path).await?;
+    let mut transaction = state.pool.begin().await?;
     let changed = sqlx::query("UPDATE accounts SET username=?,display_name=?,storage_path=?,quota_bytes=?,enabled=? WHERE id=?")
         .bind(username).bind(display_name).bind(storage_path).bind(request.quota_bytes)
-        .bind(request.enabled).bind(id).execute(&state.pool).await?;
+        .bind(request.enabled).bind(id).execute(&mut *transaction).await?;
     if changed.rows_affected() == 0 {
         return Err(AppError::not_found("user not found"));
     }
-    Ok(Json(load_user(&state, id).await?))
-}
-
-pub(crate) async fn create_instance(
-    State(state): State<AppState>,
-    Path(account_id): Path<Uuid>,
-    Json(request): Json<CreateInstanceRequest>,
-) -> Result<Json<AdminInstance>, AppError> {
-    let name = request.name.trim();
-    if name.is_empty() || name.chars().count() > 32 || name.chars().any(char::is_control) {
-        return Err(AppError::bad_request(
-            "instance name must contain 1 to 32 characters without controls",
-        ));
-    }
-    let enabled: Option<bool> = sqlx::query_scalar("SELECT enabled FROM accounts WHERE id=?")
-        .bind(account_id)
-        .fetch_optional(&state.pool)
+    sqlx::query("UPDATE devices SET name=? WHERE account_id=?")
+        .bind(display_name)
+        .bind(id)
+        .execute(&mut *transaction)
         .await?;
-    if enabled != Some(true) {
-        return Err(AppError::not_found("enabled backup user not found"));
-    }
-    let id = Uuid::new_v4();
-    let code = random_authorization_code();
-    let encrypted = state
-        .secrets
-        .encrypt_client_authorization(&id.to_string(), &code)?;
-    let hash = Sha256::digest(code.as_bytes()).to_vec();
-    let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM devices WHERE account_id=?)")
-            .bind(account_id)
-            .fetch_one(&mut *transaction)
-            .await?;
-    if exists {
-        return Err(AppError::conflict(
-            "one backup user can have only one client authorization",
-        ));
-    }
-    sqlx::query("INSERT INTO devices(id,account_id,name,platform,token_hash,authorization_code_hash,authorization_code_enc,pairing_status,created_at,last_seen_at) VALUES(?,?,?,'unknown',NULL,?,?,'pending',datetime('now'),NULL)")
-        .bind(id).bind(account_id).bind(name).bind(hash).bind(encrypted).execute(&mut *transaction).await?;
-    write_instance_audit(&mut transaction, account_id, id, "device.instance.create").await?;
     transaction.commit().await?;
-    load_instance(&state, id).await
+    Ok(Json(load_user(&state, id).await?))
 }
 
 pub(crate) async fn rotate_instance_authorization(
@@ -285,8 +246,8 @@ pub(crate) async fn remove_instance(
             return Err(AppError::conflict("instance still owns backup records"));
         }
         write_instance_audit(&mut transaction, account_id, id, "device.instance.delete").await?;
-        sqlx::query("DELETE FROM devices WHERE id=?")
-            .bind(id)
+        sqlx::query("DELETE FROM accounts WHERE id=?")
+            .bind(account_id)
             .execute(&mut *transaction)
             .await?;
     } else {

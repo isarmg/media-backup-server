@@ -14,14 +14,14 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 
 const MANIFEST_VERSION: u32 = 1;
 const PRODUCT: &str = "media-backup-server";
-const VERSION: &str = "0.3.8";
+const VERSION: &str = "0.3.9";
 const TARGET: &str = sarmg_server_target::SERVER_TARGET_TRIPLE;
 const API_VERSION: &str = media_backup_protocol::API_VERSION;
 const STORAGE_ENCODING: &str = "plain-v1";
 const MANIFEST_FILENAME: &str = "release-manifest.json";
 const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
-pub(crate) const PRODUCTION_RELEASE_ROOT: &str = "/opt/isarmg/media-backup/releases/0.3.8";
-const RELOCATABLE_RELEASE_SUFFIX: &str = "opt/isarmg/media-backup/releases/0.3.8";
+pub(crate) const PRODUCTION_RELEASE_ROOT: &str = "/opt/isarmg/media-backup/releases/0.3.9";
+const RELOCATABLE_RELEASE_SUFFIX: &str = "opt/isarmg/media-backup/releases/0.3.9";
 
 const EXPECTED_DIRECTORIES: &[&str] = &[
     "bin",
@@ -181,7 +181,7 @@ fn validate_runtime_root(root: &Path) -> Result<PathBuf> {
     );
     ensure!(
         canonical.ends_with(RELOCATABLE_RELEASE_SUFFIX),
-        "RELEASE_ROOT must end in the fixed Media Backup 0.3.8 physical release path"
+        "RELEASE_ROOT must end in the fixed Media Backup 0.3.9 physical release path"
     );
     Ok(canonical)
 }
@@ -693,11 +693,11 @@ mod tests {
         assert_eq!(identity.server_schema_revision, 4);
         assert_eq!(
             identity.web_assets_sha256,
-            "794aceba833afa04fdc5ec435549dd395575e94230c11a845380a30dc5351d2d"
+            "3ec4329e93ccca8fde05f49218e3f91f4e4b4a127ddc52da51acc43ffffc780d"
         );
         assert_eq!(
             identity.release_contract_sha256,
-            "375da139b67519a8a404eb682429c311e874f5ed6eb15c16cb01de8ea7a20701"
+            "af4d26a0fee81bf56e7420ef7b14459d205ff6bbd51f11f98e5d232d039fe9df"
         );
     }
 
@@ -731,7 +731,7 @@ mod tests {
         assert!(is_source_revision(
             "0123456789abcdef0123456789abcdef01234567"
         ));
-        assert!(!is_source_revision("v0.3.8"));
+        assert!(!is_source_revision("v0.3.9"));
         assert!(is_lower_sha256(&"a".repeat(64)));
         assert!(!is_lower_sha256(&"A".repeat(64)));
     }

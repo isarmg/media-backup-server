@@ -172,12 +172,8 @@ pub fn router(
     let admin_protected = Router::new()
         .route("/api/v2/admin/overview", get(admin::overview))
         .route("/api/v2/admin/logs", get(admin::logs))
-        .route("/api/v2/admin/users", post(admin::create_user))
         .route("/api/v2/admin/users/{id}", put(admin::update_user))
-        .route(
-            "/api/v2/admin/users/{id}/instances",
-            post(admin::create_instance),
-        )
+        .route("/api/v2/admin/instances", post(admin::create_instance))
         .route(
             "/api/v2/admin/instances/{id}/authorization",
             put(admin::rotate_instance_authorization),

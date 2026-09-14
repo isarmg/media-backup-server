@@ -15,7 +15,7 @@ Internet -> HTTPS reverse proxy -> 127.0.0.1:8080 Media Backup
 
 ## 2. 构建与验证发行归档
 
-维护者从干净的 `0.3.8` checkout 构建：
+维护者从干净的 `0.3.9` checkout 构建：
 
 ```bash
 revision="$(git rev-parse HEAD)"
@@ -27,7 +27,7 @@ mkdir -p "$PWD/dist"
 ./scripts/build-server-release.sh \
   "$PWD/target/x86_64-unknown-linux-gnu/release/media-backup-server" \
   "$revision" "$PWD/dist"
-./scripts/test-deployment.sh "$PWD/dist/media-backup-server-0.3.8-x86_64-unknown-linux-gnu.tar.gz"
+./scripts/test-deployment.sh "$PWD/dist/media-backup-server-0.3.9-x86_64-unknown-linux-gnu.tar.gz"
 ```
 
 `web/dist` 是 Rust 编译输入，不是可复用的维护者缓存；从干净 checkout 构建时必须先用锁文件生成。完成只
@@ -42,18 +42,18 @@ revision、target、`v2` 移动 API、`plain-v1`、Schema、移动 FFI、Web 与
 ## 3. 安装
 
 ```bash
-grep ' media-backup-server-0.3.8-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
+grep ' media-backup-server-0.3.9-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
   | sha256sum --check -
-tar -xzf media-backup-server-0.3.8-x86_64-unknown-linux-gnu.tar.gz
-cd media-backup-server-0.3.8-x86_64-unknown-linux-gnu
+tar -xzf media-backup-server-0.3.9-x86_64-unknown-linux-gnu.tar.gz
+cd media-backup-server-0.3.9-x86_64-unknown-linux-gnu
 ./bin/media-backup-server release-identity
 ./bin/media-backup-server release-verify "$PWD"
 sudo ./scripts/setup-wsl.sh
 sudoedit /etc/isarmg/media-backup.env
-sudo /opt/isarmg/media-backup/releases/0.3.8/scripts/start-server-wsl.sh
+sudo /opt/isarmg/media-backup/releases/0.3.9/scripts/start-server-wsl.sh
 ```
 
-安装只允许创建缺失的 `/opt/isarmg/media-backup/releases/0.3.8`，不会覆盖或复用。同版本重装应先按
+安装只允许创建缺失的 `/opt/isarmg/media-backup/releases/0.3.9`，不会覆盖或复用。同版本重装应先按
 运维变更流程处理现有部署，而不是绕过 no-clobber。环境文件首次以 `0600` 排他创建；替换自动生成的
 `BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`、`MEDIA_BACKUP_CREDENTIALS_KEY`、`METRICS_TOKEN` 并删除初始化标记后才能启动。登录候选 username
 必须是 1–64 bytes 的可打印 ASCII；Foundation 会去除首尾 ASCII whitespace、转为 ASCII 小写，再要求
@@ -83,7 +83,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
 Session 是固定平台策略，不提供产品级 TTL 配置。管理员登录来源使用真实 socket peer，不信任转发来源头。
 
-Android/iOS 只向 `/v2/auth/bootstrap` 提交服务器地址、实例授权码和设备信息。授权码由管理员在备份账户下创建实例时生成，服务端保存密文和独立查找摘要；更换授权码会清除旧设备 Token 并要求重新配对。旧数据库和账户密码 bootstrap 不受支持，Server 遇到旧 Schema 会拒绝启动。
+Android/iOS 只向 `/v2/auth/bootstrap` 提交服务器地址、实例授权码和设备信息。授权码在管理员直接新建备份实例时生成，服务端保存密文和独立查找摘要；更换授权码会清除旧设备 Token 并要求重新配对。旧数据库和账户密码 bootstrap 不受支持，Server 遇到旧 Schema 会拒绝启动。
 
 最小 Caddy 配置：
 
@@ -101,7 +101,7 @@ media.example.com {
 ```bash
 curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
-sudo /opt/isarmg/media-backup/releases/0.3.8/scripts/run-server-wsl.sh
+sudo /opt/isarmg/media-backup/releases/0.3.9/scripts/run-server-wsl.sh
 ```
 
 启动脚本先检查 `uname`，二进制的 `serve-release` 再通过内核 `uname(2)` 检查 Linux x86_64，systemd 单元
@@ -131,7 +131,7 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 
 ## 6. 当前数据库合同
 
-服务端软件版本是 `0.3.8`，但数据库合同独立保持不变：`product_metadata` 必须精确为
+服务端软件版本是 `0.3.9`，但数据库合同独立保持不变：`product_metadata` 必须精确为
 `application=media-backup`、`application_version=0.3.0`、
 `schema_revision=4`，Schema SHA-256 为
 `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`。移动队列对应
@@ -195,15 +195,17 @@ Vite 生成 HTML、JS、CSS、两个首屏 WOFF2、按需 CJK 分片与字体许
 HTTP 响应和发行身份校验，发行包 `share/web/` 必须包含相同字节。字体经同源 `/admin/assets/` 路由
 提供，类型为 `font/woff2`，不访问 CDN。必须先构建 Web，再构建 Server。
 
-备份用户是设备上传业务账户，管理接口为 `/api/v2/admin/users`，不等同于平台管理员。产品页面不展示或
-请求平台管理员列表；当前管理员只能从右上角人物图标进入 Foundation 账户设置。备份账户资料保存和密码重设是
-两个独立操作，停用需显式确认；写请求失败不会自动重放，密码会清空，界面仅显示安全错误和 Request ID。
+管理端只呈现“备份实例”：`POST /api/v2/admin/instances` 只接收实例名称，并在同一数据库事务中创建自动分配的
+内部存储归属、100 GiB 默认配额、客户端实例和长期授权码；路径和配额可在详情页调整，不要求管理员先创建业务用户。
+内部 `accounts` 仅作为上传数据的隔离与配额边界，不是登录身份，也不会在产品页面暴露账号或密码。当前管理员只能
+从右上角人物图标进入 Foundation 账户设置。实例停用需显式确认；写请求失败不会自动重放，界面仅显示安全错误和
+Request ID。
 
-`npm run test:browser --prefix web` 对实际 dist 运行 Chromium/Firefox 验收，覆盖账户操作、
-失败重试、业务账户与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
+`npm run test:browser --prefix web` 对实际 dist 运行 Chromium/Firefox 验收，覆盖实例原子创建与配对、
+失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 Foundation `=0.7.11` / `8f2a5c888bc5f543186ad58bc5b3cee4dc5b2602`；八个 Web 包使用
+当前 Server Rust 固定 Foundation `=0.8.1` / `85348eb99cbea7798a2a3f8ea55baf0179708322`；八个 Web 包使用
 同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。独立 CI 已通过，含 Server archive、
 Android 编译及未签名 iOS 验证，见[消费者证据](https://github.com/isarmg/sarmg-foundation-server/blob/main/consumers/axum-0.7.0-evidence.md)。
 这不代表这些主分支改动已重新发布为移动端或 Server 制品，也不代替原生签名和目标运行验收。

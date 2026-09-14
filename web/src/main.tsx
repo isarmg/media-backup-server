@@ -36,7 +36,6 @@ function Application() {
   const [generation, setGeneration] = useState(0);
   const [selected, setSelected] = useState<string | null>(selectedUserFromLocation);
   const [creating, setCreating] = useState(false);
-  const [createPending, setCreatePending] = useState(false);
   const reload = () => setGeneration(value => value + 1);
   useEffect(() => {
     const changed = () => { setView(currentView()); setSelected(selectedUserFromLocation()); }; window.addEventListener("hashchange", changed);
@@ -51,13 +50,13 @@ function Application() {
   }, [generation, view]);
   const user = overview?.users.find(item => item.id === selected);
   return <div className="media-business sarmg-content-stack">
-    <InstanceHeaderActions create={() => setCreating(true)} createLabel={t("新建备份用户", "Create backup user")} refresh={reload} />
+    <InstanceHeaderActions create={() => setCreating(true)} refresh={reload} />
     <InstancePageNavigation page={view} detailsDisabled={!selected} navigate={value => { window.location.hash = value === "details" && selected ? `details/${encodeURIComponent(selected)}` : value; }} />
     <h1 className="sarmg-visually-hidden">{view === "instances" ? t("备份实例列表", "Backup instance list") : view === "details" ? t("备份详细信息", "Backup details") : t("备份日志", "Backup logs")}</h1>
     {failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
       : overview === null ? <LoadingState>{t("正在载入备份数据…", "Loading backup data…")}</LoadingState>
       : view === "instances" ? <OverviewView overview={overview} /> : view === "logs" ? <LogsView /> : <><a href="#instances">{t("返回实例列表", "Back to instance list")}</a>{user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("请选择一个备份实例。", "Select a backup instance.")}</EmptyState>}</>}
-    {creating && <Dialog title={t("新建备份用户", "Create backup user")} onClose={() => { if (!createPending) setCreating(false); }}><BackupUserForm pendingChanged={setCreatePending} reload={() => { setCreating(false); reload(); }} /></Dialog>}
+    {creating && <CreateBackupInstanceDialog close={() => setCreating(false)} reload={reload} />}
   </div>;
 }
 
@@ -70,29 +69,29 @@ function OverviewView({ overview }: { overview: Overview }) {
       <tr><th scope="row">{t("实例总数", "Total instances")}</th><td>{overview.total_users}</td></tr>
       <tr><th scope="row">{t("在线实例", "Online instances")}</th><td>{online}</td></tr>
       <tr><th scope="row">{t("待配对实例", "Instances awaiting pairing")}</th><td>{pending}</td></tr>
-      <tr><th scope="row">{t("启用 / 全部用户", "Active / total users")}</th><td>{overview.active_users} / {overview.total_users}</td></tr>
+      <tr><th scope="row">{t("启用 / 全部实例", "Active / total instances")}</th><td>{overview.active_users} / {overview.total_users}</td></tr>
       <tr><th scope="row">{t("媒体已用", "Media storage used")}</th><td>{bytes(overview.used_bytes)}</td></tr>
       <tr><th scope="row">{t("上传预留空间", "Reserved upload space")}</th><td>{bytes(overview.pending_bytes)}</td></tr>
       <tr><th scope="row">{t("已分配配额", "Allocated quota")}</th><td>{bytes(overview.quota_bytes)}{overview.unlimited_users > 0 ? t(" + 不限", " + Unlimited") : ""}</td></tr>
     </tbody></Table>
   </Section><Section title={t("实例列表", "Instance list")}>
     {overview.users.length === 0 ? <EmptyState>{t("暂无备份实例", "No backup instances")}</EmptyState> : <Table aria-label={t("实例列表", "Instance list")}>
-      <thead><tr><th>{t("实例", "Instance")}</th><th>{t("账号", "Account")}</th><th>{t("账号状态", "Account status")}</th><th>{t("配对状态", "Pairing status")}</th><th>{t("在线状态", "Online status")}</th><th>{t("客户端 / 平台", "Client / platform")}</th><th>{t("最后在线", "Last seen")}</th><th>{t("已用容量 / 配额", "Used / quota")}</th></tr></thead>
+      <thead><tr><th>{t("实例", "Instance")}</th><th>{t("备份状态", "Backup status")}</th><th>{t("配对状态", "Pairing status")}</th><th>{t("在线状态", "Online status")}</th><th>{t("客户端 / 平台", "Client / platform")}</th><th>{t("最后在线", "Last seen")}</th><th>{t("已用容量 / 配额", "Used / quota")}</th></tr></thead>
       <tbody>{overview.users.map(user => { const client = user.instances[0]; return <tr key={user.id}>
-        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{user.display_name}</a></th><td>{user.username}</td><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td><td><StatusBadge status={client?.status ?? t("未配置", "Not configured")} /></td><td><StatusBadge status={client?.online ? t("在线", "Online") : t("离线", "Offline")} /></td><td>{client ? `${client.name} / ${client.platform}` : "—"}</td><td>{client?.last_seen_at || t("尚未配对", "Not paired yet")}</td><td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}</td>
+        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{user.display_name}</a></th><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td><td><StatusBadge status={client?.status ?? t("旧数据待补全", "Legacy entry incomplete")} /></td><td><StatusBadge status={client?.online ? t("在线", "Online") : t("离线", "Offline")} /></td><td>{client ? `${client.name} / ${client.platform}` : "—"}</td><td>{client?.last_seen_at || t("尚未配对", "Not paired yet")}</td><td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}</td>
       </tr>; })}</tbody>
     </Table>}
   </Section></div>;
 }
 
 function UsersView({ overview, reload }: { overview: Overview; reload(): void }) {
-  return <div className="media-sections"><p>{t("备份用户用于设备上传。配额为 0 表示不限。", "Backup users upload from devices. A quota of 0 means unlimited.")}</p>
-    <Section title={t("管理备份用户", "Manage backup users")}><div className="media-grid">
-      {overview.users.length === 0 ? <EmptyState>{t("暂无备份用户", "No backup users yet")}</EmptyState> : overview.users.map(user => <div key={user.id} className="sarmg-content-stack"><BackupUserForm user={user} reload={reload} /><InstanceManager user={user} reload={reload} /></div>)}
+  return <div className="media-sections"><p>{t("每个备份实例直接对应一个客户端授权码和独立存储配额；配额为 0 表示不限。", "Each backup instance directly owns one client authorization code and an isolated storage quota. A quota of 0 means unlimited.")}</p>
+    <Section title={t("管理备份实例", "Manage backup instance")}><div className="media-grid">
+      {overview.users.length === 0 ? <EmptyState>{t("暂无备份实例", "No backup instances yet")}</EmptyState> : overview.users.map(user => <div key={user.id} className="sarmg-content-stack"><BackupUserForm user={user} reload={reload} /><InstanceManager user={user} reload={reload} /></div>)}
     </div></Section></div>;
 }
 
-function BackupUserForm({ user, reload, pendingChanged }: { user?: BackupUser; reload(): void; pendingChanged?(value: boolean): void }) {
+function BackupUserForm({ user, reload }: { user: BackupUser; reload(): void }) {
   const { notify } = useAdminApplication();
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
@@ -100,13 +99,13 @@ function BackupUserForm({ user, reload, pendingChanged }: { user?: BackupUser; r
   const [disableInput, setDisableInput] = useState<Record<string, unknown> | null>(null);
   async function save(input: Record<string, unknown>, form?: HTMLFormElement) {
     if (busy.current) return;
-    busy.current = true; setPending(true); pendingChanged?.(true); setFailure(null);
+    busy.current = true; setPending(true); setFailure(null);
     try {
-      await request(user ? "/api/v2/admin/users/" + user.id : "/api/v2/admin/users", isBackupUser,
-        { method: user ? "PUT" : "POST", body: JSON.stringify(input) });
-      form?.reset(); setDisableInput(null); notify(user ? t("备份用户已保存", "Backup user saved") : t("备份用户已创建", "Backup user created")); reload();
+      await request("/api/v2/admin/users/" + user.id, isBackupUser,
+        { method: "PUT", body: JSON.stringify(input) });
+      form?.reset(); setDisableInput(null); notify(t("备份实例已保存", "Backup instance saved")); reload();
     } catch (error) { setFailure({ requestId: errorRequestId(error) }); }
-    finally { busy.current = false; setPending(false); pendingChanged?.(false); }
+    finally { busy.current = false; setPending(false); }
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (busy.current) return;
@@ -114,39 +113,60 @@ function BackupUserForm({ user, reload, pendingChanged }: { user?: BackupUser; r
     try {
       const input = { username: String(data.get("username") ?? ""), display_name: String(data.get("display_name") ?? ""),
         storage_path: String(data.get("storage_path") ?? ""), quota_bytes: quotaBytes(data.get("quota_gib")),
-        enabled: user ? data.has("enabled") : true };
-      if (user?.enabled && !input.enabled) setDisableInput(input); else void save(input, form);
+        enabled: data.has("enabled") };
+      if (user.enabled && !input.enabled) setDisableInput(input); else void save(input, form);
     } catch (error) { setFailure({ requestId: errorRequestId(error) }); }
   }
-  const error = failure && <ErrorState requestId={failure.requestId}>{t("未能保存备份用户，请检查账号、路径和配额后重试。", "Unable to save the backup user. Check the account, path and quota, then retry.")}</ErrorState>;
+  const error = failure && <ErrorState requestId={failure.requestId}>{t("未能保存备份实例，请检查名称、路径和配额后重试。", "Unable to save the backup instance. Check the name, path, and quota, then retry.")}</ErrorState>;
   return <article className="media-card sarmg-content-panel">
-    {user && <><h3>{user.display_name}</h3><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></>}
-    <form aria-label={user ? t("编辑备份用户 ", "Edit backup user ") + user.username : t("创建备份用户", "Create backup user")} aria-busy={pending} onSubmit={submit}>
+    <h3>{user.display_name}</h3><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} />
+    <form aria-label={t("编辑备份实例 ", "Edit backup instance ") + user.display_name} aria-busy={pending} onSubmit={submit}>
       {!disableInput && error}
-      <FormField label={t("名称", "Name")}><InstanceNameField name="display_name" defaultValue={user?.display_name ?? ""} required readOnly={pending} /></FormField>
-      <FormField label={t("账号", "Account")}><TextField name="username" defaultValue={user?.username ?? ""} required minLength={3} maxLength={64} readOnly={pending} autoComplete="off" /></FormField>
-      <FormField label={t("存储路径", "Storage path")}><TextField name="storage_path" defaultValue={user?.storage_path ?? ""} placeholder={t("自动分配", "Automatically assigned")} required={!!user} readOnly={pending} /></FormField>
-      <FormField label={t("配额（GiB，0 表示不限）", "Quota (GiB; 0 means unlimited)")}><TextField name="quota_gib" type="number" min={0} step="any" defaultValue={user ? user.quota_bytes / GIB : 100} required readOnly={pending} /></FormField>
-      {user && <label className="media-check"><Checkbox name="enabled" defaultChecked={user.enabled} disabled={pending} />{t("启用备份用户", "Enable backup user")}</label>}
-      <div className="sarmg-actions"><Button type="submit" disabled={pending}>{pending ? t("正在保存…", "Saving…") : user ? t("保存备份用户", "Save backup user") : t("创建备份用户", "Create backup user")}</Button></div>
+      <FormField label={t("实例名称", "Instance name")}><InstanceNameField name="display_name" defaultValue={user.display_name} required readOnly={pending} /></FormField>
+      <input type="hidden" name="username" value={user.username} />
+      <FormField label={t("存储路径", "Storage path")}><TextField name="storage_path" defaultValue={user.storage_path} required readOnly={pending} /></FormField>
+      <FormField label={t("配额（GiB，0 表示不限）", "Quota (GiB; 0 means unlimited)")}><TextField name="quota_gib" type="number" min={0} step="any" defaultValue={user.quota_bytes / GIB} required readOnly={pending} /></FormField>
+      <label className="media-check"><Checkbox name="enabled" defaultChecked={user.enabled} disabled={pending} />{t("启用备份实例", "Enable backup instance")}</label>
+      <div className="sarmg-actions"><Button type="submit" disabled={pending}>{pending ? t("正在保存…", "Saving…") : t("保存实例", "Save instance")}</Button></div>
     </form>
-    {user && disableInput && <ConfirmDangerDialog title={t("停用备份用户 ", "Disable backup user ") + user.username + "？"} description={t("该账户将无法继续上传，已有备份数据不会删除。", "This account will no longer be able to upload. Existing backups will not be deleted.")} pending={pending}
+    {disableInput && <ConfirmDangerDialog title={t("停用备份实例 ", "Disable backup instance ") + user.display_name + "？"} description={t("该实例将无法继续上传，已有备份数据不会删除。", "This instance will no longer be able to upload. Existing backups will not be deleted.")} pending={pending}
       onClose={() => { if (!busy.current) { setDisableInput(null); setFailure(null); } }} onConfirm={() => void save(disableInput)}>{error}</ConfirmDangerDialog>}
   </article>;
 }
 
+function CreateBackupInstanceDialog({ close, reload }: { close(): void; reload(): void }) {
+  const { notify } = useAdminApplication();
+  const busy = useRef(false);
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [created, setCreated] = useState<BackupInstance | null>(null);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy.current) return;
+    const data = new FormData(event.currentTarget);
+    busy.current = true; setPending(true); setFailure(null);
+    try {
+      const instance = await request("/api/v2/admin/instances", isBackupInstance, { method: "POST", body: JSON.stringify({
+        name: String(data.get("name") ?? "").trim(),
+      }) });
+      setCreated(instance); reload(); notify(t("备份实例已创建", "Backup instance created"));
+    } catch (error) { setFailure({ requestId: errorRequestId(error) }); }
+    finally { busy.current = false; setPending(false); }
+  }
+  return <Dialog title={t("新建备份实例", "Create backup instance")} description={t("填写名称后会直接生成实例和长期授权码；存储路径自动分配，配额可在详情中调整。", "Enter a name to create the instance and its long-lived authorization code. Storage is allocated automatically, and quota can be changed in details.")} onClose={() => { if (!busy.current) close(); }}>
+    {created ? <section className="sarmg-content-stack"><p role="status">{t("实例已创建：", "Instance created: ")}{created.name}</p><p>{t("将此长期授权码填入 Media Backup 客户端。服务端会加密保存，之后仍可查看和更换。", "Enter this long-lived authorization code in the Media Backup client. The server stores it encrypted and keeps it viewable and replaceable.")}</p><FormField label={t("授权码", "Authorization code")}><TextField readOnly value={created.authorization_code} autoComplete="off" onFocus={event => event.currentTarget.select()} /></FormField><Button onClick={close}>{t("已保存，关闭", "Saved; close")}</Button></section>
+    : <form aria-label={t("创建备份实例", "Create backup instance")} aria-busy={pending} onSubmit={event => void submit(event)}>
+      {failure && <ErrorState requestId={failure.requestId}>{t("实例未能创建，请检查名称后重试。", "The instance could not be created. Check its name, then retry.")}</ErrorState>}
+      <FormField label={t("实例名称", "Instance name")}><InstanceNameField name="name" required readOnly={pending} data-sarmg-initial-focus /></FormField>
+      <div className="sarmg-actions"><Button disabled={pending} onClick={close}>{t("取消", "Cancel")}</Button><Button type="submit" disabled={pending}>{pending ? t("正在创建…", "Creating…") : t("创建实例", "Create instance")}</Button></div>
+    </form>}
+  </Dialog>;
+}
+
 function InstanceManager({ user, reload }: { user: BackupUser; reload(): void }) {
   const { notify } = useAdminApplication();
-  const [name, setName] = useState("");
   const [pending, setPending] = useState(false);
   const [remove, setRemove] = useState<BackupInstance | null>(null);
-  async function create() {
-    setPending(true);
-    try {
-      await request(`/api/v2/admin/users/${user.id}/instances`, isBackupInstance, { method: "POST", body: JSON.stringify({ name }) });
-      setName(""); notify(t("备份实例已创建", "Backup instance created")); reload();
-    } finally { setPending(false); }
-  }
   async function rotate(instance: BackupInstance) {
     setPending(true);
     try {
@@ -163,10 +183,8 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
   }
   return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("客户端实例", "Client instances")}>
     <h2>{t("客户端配对", "Client pairing")}</h2>
-    <p>{t("一个备份用户就是一个实例，并且只能配对一个客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "One backup user is one instance and can pair exactly one client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
-    {user.instances.length === 0 && <><FormField label={t("客户端名称", "Client name")}><InstanceNameField value={name} onChange={event => setName(event.currentTarget.value)} /></FormField>
-    <div className="sarmg-actions"><Button disabled={pending || !name.trim()} onClick={() => void create()}>{t("创建授权码", "Create authorization code")}</Button></div></>}
-    {user.instances.length === 0 ? <EmptyState>{t("暂无客户端实例", "No client instances")}</EmptyState> : <Table aria-label={t("客户端实例列表", "Client instance list")}><thead><tr><th>{t("名称", "Name")}</th><th>{t("状态", "Status")}</th><th>{t("授权码", "Authorization code")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><td>{instance.name}</td><td><StatusBadge status={instance.status} /></td><td><code>{instance.authorization_code}</code></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换授权码", "Change code")}</Button>}<Button disabled={pending} onClick={() => setRemove(instance)}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
+    <p>{t("实例拥有一个长期客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "The instance owns one long-lived client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
+    {user.instances.length === 0 ? <EmptyState>{t("这是旧版未完成的记录，没有客户端授权码；请新建备份实例。", "This legacy incomplete entry has no client authorization code. Create a new backup instance.")}</EmptyState> : <Table aria-label={t("客户端配对信息", "Client pairing information")}><thead><tr><th>{t("名称", "Name")}</th><th>{t("状态", "Status")}</th><th>{t("授权码", "Authorization code")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><td>{instance.name}</td><td><StatusBadge status={instance.status} /></td><td><code>{instance.authorization_code}</code></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换授权码", "Change code")}</Button>}<Button disabled={pending} onClick={() => setRemove(instance)}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
     {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) setRemove(null); }} onConfirm={() => void removeInstance(remove)} />; })()}
   </section>;
 }
