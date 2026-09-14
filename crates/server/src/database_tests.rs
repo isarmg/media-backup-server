@@ -630,6 +630,18 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         .await,
     )
     .await;
+    send(
+        &app,
+        json_request(
+            Method::POST,
+            format!("/api/v2/admin/users/{account_id}/instances"),
+            json!({"name": "Second Phone"}),
+            None,
+            Some((&admin_cookie, &admin_csrf)),
+        ),
+        StatusCode::CONFLICT,
+    )
+    .await;
     let bootstrap = json_body(
         send(
             &app,

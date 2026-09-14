@@ -59,6 +59,7 @@ pub(crate) struct AdminInstance {
     name: String,
     platform: String,
     status: String,
+    online: bool,
     authorization_code: String,
     created_at: String,
     last_seen_at: String,
@@ -218,7 +219,17 @@ pub(crate) async fn create_instance(
         .secrets
         .encrypt_client_authorization(&id.to_string(), &code)?;
     let hash = Sha256::digest(code.as_bytes()).to_vec();
-    let mut transaction = state.pool.begin().await?;
+    let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM devices WHERE account_id=?)")
+            .bind(account_id)
+            .fetch_one(&mut *transaction)
+            .await?;
+    if exists {
+        return Err(AppError::conflict(
+            "one backup user can have only one client authorization",
+        ));
+    }
     sqlx::query("INSERT INTO devices(id,account_id,name,platform,token_hash,authorization_code_hash,authorization_code_enc,pairing_status,created_at,last_seen_at) VALUES(?,?,?,'unknown',NULL,?,?,'pending',datetime('now'),NULL)")
         .bind(id).bind(account_id).bind(name).bind(hash).bind(encrypted).execute(&mut *transaction).await?;
     write_instance_audit(&mut transaction, account_id, id, "device.instance.create").await?;
@@ -334,7 +345,7 @@ async fn load_instances(
     state: &AppState,
     only: Option<Uuid>,
 ) -> Result<Vec<AdminInstance>, AppError> {
-    let rows = sqlx::query("SELECT id,account_id,name,platform,pairing_status,authorization_code_enc,strftime('%Y-%m-%dT%H:%M:%SZ',created_at) created_at,COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',last_seen_at),'') last_seen_at FROM devices WHERE (? IS NULL OR id=?) ORDER BY created_at")
+    let rows = sqlx::query("SELECT id,account_id,name,platform,pairing_status,(pairing_status='paired' AND last_seen_at IS NOT NULL AND last_seen_at>=datetime('now','-10 minutes')) online,authorization_code_enc,strftime('%Y-%m-%dT%H:%M:%SZ',created_at) created_at,COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',last_seen_at),'') last_seen_at FROM devices WHERE (? IS NULL OR id=?) ORDER BY created_at")
         .bind(only).bind(only).fetch_all(&state.pool).await?;
     rows.into_iter()
         .map(|row| {
@@ -346,6 +357,7 @@ async fn load_instances(
                 name: row.get("name"),
                 platform: row.get("platform"),
                 status: row.get("pairing_status"),
+                online: row.get("online"),
                 authorization_code: state
                     .secrets
                     .decrypt_client_authorization(&id.to_string(), &encrypted)?,

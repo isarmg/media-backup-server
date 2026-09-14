@@ -287,6 +287,8 @@ CREATE UNIQUE INDEX accounts_storage_path_unique_idx ON accounts(storage_path);
 
 CREATE UNIQUE INDEX accounts_username_unique_idx ON accounts(lower(username));
 
+CREATE UNIQUE INDEX devices_account_unique_idx ON devices(account_id);
+
 CREATE UNIQUE INDEX blobs_content_unique_idx ON blobs(account_id, content_blake3);
 
 CREATE INDEX uploads_lookup_idx

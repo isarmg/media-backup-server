@@ -25,9 +25,9 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 const APPLICATION: &str = "media-backup";
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const CURRENT_SCHEMA: &str = include_str!("../schema/generated/current_schema.sql");
-pub(crate) const CURRENT_SCHEMA_REVISION: i64 = 3;
+pub(crate) const CURRENT_SCHEMA_REVISION: i64 = 4;
 pub(crate) const CURRENT_SCHEMA_SHA256: &str =
-    "d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e";
+    "84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe";
 
 pub(crate) async fn connect(database_url: &str) -> anyhow::Result<SqlitePool> {
     prepare_current_database(database_url)?;

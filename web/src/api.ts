@@ -23,6 +23,7 @@ export type BackupInstance = {
   name: string;
   platform: string;
   status: string;
+  online: boolean;
   authorization_code: string;
   created_at: string;
   last_seen_at: string;
@@ -50,7 +51,7 @@ const isNumber = (value: unknown): value is number =>
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 
 export const isBackupInstance: JsonGuard<BackupInstance> = (value): value is BackupInstance =>
-  isRecord(value) && ["id", "name", "platform", "status", "authorization_code", "created_at", "last_seen_at"].every(key => isString(value[key]));
+  isRecord(value) && ["id", "name", "platform", "status", "authorization_code", "created_at", "last_seen_at"].every(key => isString(value[key])) && isBoolean(value.online);
 
 export const isBackupUser: JsonGuard<BackupUser> = (
   value,

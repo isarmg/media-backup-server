@@ -62,31 +62,25 @@ function Application() {
 }
 
 function OverviewView({ overview }: { overview: Overview }) {
-  return <div className="media-sections"><Section title={t("备份统计", "Backup statistics")}><Table aria-label={t("备份统计", "Backup statistics")}>
+  const online = overview.users.filter(user => user.instances[0]?.online === true).length;
+  const pending = overview.users.filter(user => user.instances[0]?.status === "pending").length;
+  return <div className="media-sections"><Section title={t("统计", "Statistics")}><Table aria-label={t("实例统计", "Instance statistics")}>
     <thead><tr><th scope="col">{t("统计项", "Metric")}</th><th scope="col">{t("当前值", "Current value")}</th></tr></thead>
     <tbody>
+      <tr><th scope="row">{t("实例总数", "Total instances")}</th><td>{overview.total_users}</td></tr>
+      <tr><th scope="row">{t("在线实例", "Online instances")}</th><td>{online}</td></tr>
+      <tr><th scope="row">{t("待配对实例", "Instances awaiting pairing")}</th><td>{pending}</td></tr>
       <tr><th scope="row">{t("启用 / 全部用户", "Active / total users")}</th><td>{overview.active_users} / {overview.total_users}</td></tr>
       <tr><th scope="row">{t("媒体已用", "Media storage used")}</th><td>{bytes(overview.used_bytes)}</td></tr>
       <tr><th scope="row">{t("上传预留空间", "Reserved upload space")}</th><td>{bytes(overview.pending_bytes)}</td></tr>
       <tr><th scope="row">{t("已分配配额", "Allocated quota")}</th><td>{bytes(overview.quota_bytes)}{overview.unlimited_users > 0 ? t(" + 不限", " + Unlimited") : ""}</td></tr>
-    </tbody>
-  </Table></Section><Section title={t("用户概览", "User overview")}>
-    {overview.users.length === 0 ? <EmptyState>{t("暂无备份用户", "No backup users yet")}</EmptyState> : <div className="media-overview-table"><Table aria-label={t("用户概览", "User overview")}>
-      <thead><tr>{[t("用户", "User"), t("账号", "Account"), t("状态", "Status"), t("设备", "Devices"), t("资源", "Resources"), t("已用容量 / 配额", "Used / quota"), t("上传预留", "Upload reservation"), t("存储路径", "Storage path")].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
-      <tbody>{overview.users.map(user => <tr key={user.id}>
-        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{user.display_name}</a></th>
-        <td>{user.username}</td><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td>
-        <td>{user.device_count}</td><td>{user.resource_count}</td>
-        <td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}<progress max={1} value={user.quota_bytes > 0 ? Math.min(1, user.used_bytes / user.quota_bytes) : 0} aria-label={user.username + t(" 存储配额占用比例", " Storage quota usage")} /></td>
-        <td>{bytes(user.pending_bytes)}</td><td>{user.storage_path}</td>
-      </tr>)}</tbody>
-    </Table></div>}
+    </tbody></Table>
   </Section><Section title={t("实例列表", "Instance list")}>
-    {overview.users.every(user => user.instances.length === 0) ? <EmptyState>{t("暂无客户端实例", "No client instances")}</EmptyState> : <Table aria-label={t("实例列表", "Instance list")}>
-      <thead><tr><th>{t("实例", "Instance")}</th><th>{t("所属用户", "Owner")}</th><th>{t("状态", "Status")}</th><th>{t("平台", "Platform")}</th><th>{t("最后在线", "Last seen")}</th></tr></thead>
-      <tbody>{overview.users.flatMap(user => user.instances.map(instance => <tr key={instance.id}>
-        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{instance.name}</a></th><td>{user.display_name}</td><td><StatusBadge status={instance.status} /></td><td>{instance.platform}</td><td>{instance.last_seen_at || t("尚未配对", "Not paired yet")}</td>
-      </tr>))}</tbody>
+    {overview.users.length === 0 ? <EmptyState>{t("暂无备份实例", "No backup instances")}</EmptyState> : <Table aria-label={t("实例列表", "Instance list")}>
+      <thead><tr><th>{t("实例", "Instance")}</th><th>{t("账号", "Account")}</th><th>{t("账号状态", "Account status")}</th><th>{t("配对状态", "Pairing status")}</th><th>{t("在线状态", "Online status")}</th><th>{t("客户端 / 平台", "Client / platform")}</th><th>{t("最后在线", "Last seen")}</th><th>{t("已用容量 / 配额", "Used / quota")}</th></tr></thead>
+      <tbody>{overview.users.map(user => { const client = user.instances[0]; return <tr key={user.id}>
+        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{user.display_name}</a></th><td>{user.username}</td><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td><td><StatusBadge status={client?.status ?? t("未配置", "Not configured")} /></td><td><StatusBadge status={client?.online ? t("在线", "Online") : t("离线", "Offline")} /></td><td>{client ? `${client.name} / ${client.platform}` : "—"}</td><td>{client?.last_seen_at || t("尚未配对", "Not paired yet")}</td><td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}</td>
+      </tr>; })}</tbody>
     </Table>}
   </Section></div>;
 }
@@ -168,10 +162,10 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
     } finally { setPending(false); setRemove(null); }
   }
   return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("客户端实例", "Client instances")}>
-    <h2>{t("客户端实例", "Client instances")}</h2>
-    <p>{t("每个实例只有一个长期授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "Each instance has one long-lived authorization code. It is encrypted and viewable on the server; changing it invalidates the old client and requires pairing again.")}</p>
-    <FormField label={t("实例名称", "Instance name")}><InstanceNameField value={name} onChange={event => setName(event.currentTarget.value)} /></FormField>
-    <div className="sarmg-actions"><Button disabled={pending || !name.trim()} onClick={() => void create()}>{t("创建实例", "Create instance")}</Button></div>
+    <h2>{t("客户端配对", "Client pairing")}</h2>
+    <p>{t("一个备份用户就是一个实例，并且只能配对一个客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "One backup user is one instance and can pair exactly one client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
+    {user.instances.length === 0 && <><FormField label={t("客户端名称", "Client name")}><InstanceNameField value={name} onChange={event => setName(event.currentTarget.value)} /></FormField>
+    <div className="sarmg-actions"><Button disabled={pending || !name.trim()} onClick={() => void create()}>{t("创建授权码", "Create authorization code")}</Button></div></>}
     {user.instances.length === 0 ? <EmptyState>{t("暂无客户端实例", "No client instances")}</EmptyState> : <Table aria-label={t("客户端实例列表", "Client instance list")}><thead><tr><th>{t("名称", "Name")}</th><th>{t("状态", "Status")}</th><th>{t("授权码", "Authorization code")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><td>{instance.name}</td><td><StatusBadge status={instance.status} /></td><td><code>{instance.authorization_code}</code></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换授权码", "Change code")}</Button>}<Button disabled={pending} onClick={() => setRemove(instance)}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
     {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) setRemove(null); }} onConfirm={() => void removeInstance(remove)} />; })()}
   </section>;

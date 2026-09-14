@@ -202,7 +202,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 软件为 0.3.7，数据库 Schema identity 独立保持 media-backup 0.3.0、revision 3、SHA `d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 软件为 0.3.7，数据库 Schema identity 为 media-backup 0.3.0、revision 4、SHA `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-002 | Client 当前 Schema SHA 为 `fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558` | `client-core/database.rs` | 保障 | 高 | 手机队列状态不可证明 | Rust/Kotlin/Swift epoch 与 Schema identity |
 | MED-R-003 | 两个数据库都先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | 两个 `database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |

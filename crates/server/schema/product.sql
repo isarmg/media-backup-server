@@ -24,6 +24,8 @@ CREATE TABLE devices (
     last_seen_at TEXT
 );
 
+CREATE UNIQUE INDEX devices_account_unique_idx ON devices(account_id);
+
 CREATE TABLE assets (
     id TEXT PRIMARY KEY,
     account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

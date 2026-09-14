@@ -8,7 +8,7 @@ const session = { authenticated: true, user_id: "A".repeat(43), username: "admin
 const time = "2026-09-04T00:00:00Z", userId = "018f1f4b-7a5d-7b5f-8d31-123456789abc";
 const instanceId = "018f1f4b-7a5d-7b5f-8d31-123456789abd", code = "m".repeat(43);
 function instance(overrides = {}) {
-  return { id: instanceId, name: "验收手机", platform: "android", status: "pending", authorization_code: code, created_at: time, last_seen_at: "", ...overrides };
+  return { id: instanceId, name: "验收手机", platform: "android", status: "pending", online: false, authorization_code: code, created_at: time, last_seen_at: "", ...overrides };
 }
 function backupUser(overrides = {}) {
   return { id: userId, username: "backup", display_name: "验收备份账户", storage_path: "blobs/acceptance", quota_bytes: 123456789,
@@ -74,7 +74,8 @@ try {
 
       await page.goto(`http://127.0.0.1:${address.port}/admin/`);
       await expect(page.getByRole("button", { name: "实例列表", exact: true })).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByRole("table", { name: "实例列表" }).getByRole("link", { name: "验收手机" })).toBeVisible();
+      await expect(page.getByRole("table", { name: "实例统计" })).toBeVisible();
+      await expect(page.getByRole("table", { name: "实例列表" }).getByRole("link", { name: "验收备份账户" })).toBeVisible();
       await expect(page.getByRole("complementary")).toHaveCount(0);
       assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -91,7 +92,7 @@ try {
       await create.getByRole("button", { name: "创建备份用户", exact: true }).click();
       await expect(create).toHaveCount(0);
 
-      await page.getByRole("link", { name: "验收手机", exact: true }).click();
+      await page.getByRole("link", { name: "验收备份账户", exact: true }).click();
       await expect(page.getByRole("button", { name: "详细信息", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByRole("form", { name: "编辑备份用户 backup", exact: true }).getByLabel("密码")).toHaveCount(0);
       await expect(page.getByText(code, { exact: true })).toBeVisible();
@@ -103,8 +104,8 @@ try {
       await page.getByRole("button", { name: "删除实例", exact: true }).click();
       await page.getByRole("button", { name: "确认", exact: true }).click();
       await expect(page.getByText("暂无客户端实例", { exact: true })).toBeVisible();
-      await page.getByLabel("实例名称", { exact: true }).fill("重新配对手机");
-      await page.getByRole("button", { name: "创建实例", exact: true }).click();
+      await page.getByLabel("客户端名称", { exact: true }).fill("重新配对手机");
+      await page.getByRole("button", { name: "创建授权码", exact: true }).click();
       await expect(page.getByText("n".repeat(43), { exact: true })).toBeVisible();
 
       await page.getByRole("button", { name: "日志", exact: true }).click();
