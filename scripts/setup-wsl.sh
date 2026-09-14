@@ -2,9 +2,9 @@
 set -euo pipefail
 
 readonly product="media-backup-server"
-readonly version="0.3.6"
+readonly version="0.3.7"
 readonly target="x86_64-unknown-linux-gnu"
-readonly release_contract_sha256="5fa62beb0bef2a9234f8707c146f24546fc6a60391ac92473042335a40557257"
+readonly release_contract_sha256="276c4dc1934fc91a87e3f07a71f93fd17404f0a987c9ef845f5833dac3945448"
 readonly service_user="isarmg-media"
 readonly service_group="isarmg-media"
 readonly app_dir="/opt/isarmg/media-backup"
@@ -156,14 +156,14 @@ expected_identity_keys = {
 }
 expected_identity = {
     "product": "media-backup-server",
-    "version": "0.3.6",
+    "version": "0.3.7",
     "target": "x86_64-unknown-linux-gnu",
     "api_version": "v2",
     "storage_encoding": "plain-v1",
     "server_schema_revision": 3,
     "server_schema_sha256": "d65bf1183bc5bf3546738226c49711dbdbd520c5120a18df075273d5904bf51e",
     "web_assets_sha256": "8a56e8105830e45516c527c6ebec2bc998fc9b92c0f6a274f0102bac36863ee1",
-    "release_contract_sha256": "5fa62beb0bef2a9234f8707c146f24546fc6a60391ac92473042335a40557257",
+    "release_contract_sha256": "276c4dc1934fc91a87e3f07a71f93fd17404f0a987c9ef845f5833dac3945448",
 }
 expected_directories = {
     "bin", "config", "docs", "scripts", "share", "share/web",
@@ -461,7 +461,7 @@ preflight_config_path="$(rooted "$config_file")"
 preflight_unit_path="$(rooted "$unit_file")"
 validate_empty_release_destination
 if [[ -e "$preflight_release_path" || -L "$preflight_release_path" ]]; then
-  die "release 0.3.6 destination already exists; installation is one-shot and no-clobber"
+  die "release 0.3.7 destination already exists; installation is one-shot and no-clobber"
 fi
 if [[ -e "$preflight_config_path" || -L "$preflight_config_path" ]]; then
   ensure_single_link_regular_file "$preflight_config_path" "configuration"
@@ -494,7 +494,7 @@ if [[ "$test_mode" == "0" ]]; then
 fi
 
 [[ ! -e "$release_path" && ! -L "$release_path" ]] ||
-  die "release 0.3.6 destination appeared during installation"
+  die "release 0.3.7 destination appeared during installation"
 if [[ -e "$config_path" || -L "$config_path" ]]; then
   ensure_single_link_regular_file "$config_path" "configuration"
 fi

@@ -1,8 +1,8 @@
-# Media Backup Server 0.3.6 发行包使用手册
+# Media Backup Server 0.3.7 发行包使用手册
 
-本文档只面向已经构建完成的 `media-backup-server-0.3.6-x86_64-unknown-linux-gnu.tar.gz`
+本文档只面向已经构建完成的 `media-backup-server-0.3.7-x86_64-unknown-linux-gnu.tar.gz`
 正式发行包。它不是源码构建指南，也不描述 Android、iOS 或开发环境。本文出现的命令、路径和文件均以
-当前 `0.3.6` 发行包的实际内容为准。
+当前 `0.3.7` 发行包的实际内容为准。
 
 ## 1. 先了解发行边界
 
@@ -11,7 +11,7 @@
   Server 支持范围内。
 - 正式运行方式是 systemd。服务固定使用非 root 账户 `isarmg-media`。
 - 当前发行是不可变版本目录，不使用 `current` 软链接，也不会从任意路径动态选择二进制。
-- 安装器只接受全新的目标。它不会覆盖、合并或修补已有 `0.3.6` 发行目录，也不会覆盖已有 systemd
+- 安装器只接受全新的目标。它不会覆盖、合并或修补已有 `0.3.7` 发行目录，也不会覆盖已有 systemd
   unit。
 - 本轮仅支持唯一当前版本，不提供旧版本升级或兼容路径。当前状态的离线校验、备份和恢复由独立的
   `sarmg-upgrade` 项目负责，不能通过修改数据库版本号、发行 manifest 或软链接绕过检查。
@@ -38,7 +38,7 @@
 解压后只有一个顶层目录：
 
 ```text
-media-backup-server-0.3.6-x86_64-unknown-linux-gnu/
+media-backup-server-0.3.7-x86_64-unknown-linux-gnu/
 ├── bin/media-backup-server
 ├── config/media-backup.env.example
 ├── docs/feature-inventory-and-tradeoffs.md
@@ -80,7 +80,7 @@ media-backup-server-0.3.6-x86_64-unknown-linux-gnu/
 根。
 
 ```bash
-archive='media-backup-server-0.3.6-x86_64-unknown-linux-gnu.tar.gz'
+archive='media-backup-server-0.3.7-x86_64-unknown-linux-gnu.tar.gz'
 expected_sha256='从可信发布页复制的64位小写SHA-256'
 printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum --check --strict -
 ```
@@ -90,7 +90,7 @@ printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum --check --strict -
 ```bash
 tar -tzf "$archive"
 tar -xzf "$archive"
-cd media-backup-server-0.3.6-x86_64-unknown-linux-gnu
+cd media-backup-server-0.3.7-x86_64-unknown-linux-gnu
 ```
 
 在安装前读取二进制身份并验证整个解压目录：
@@ -103,7 +103,7 @@ cd media-backup-server-0.3.6-x86_64-unknown-linux-gnu
 `release-identity` 应报告以下关键字段：
 
 - `product`：`media-backup-server`
-- `version`：`0.3.6`
+- `version`：`0.3.7`
 - `target`：`x86_64-unknown-linux-gnu`
 - `api_version`：`v2`
 - `storage_encoding`：`plain-v1`
@@ -126,7 +126,7 @@ sudo ./scripts/setup-wsl.sh
 2. 在任何安装写入前拒绝链接路径、特殊文件、非空发行目标、已有版本目录和已有 systemd unit。
 3. 创建或核对专用组与账户 `isarmg-media`；账户 home 固定为
    `/var/lib/isarmg/media-backup`，登录 shell 必须是 `nologin`。
-4. 把经过校验的完整发行复制到 `/opt/isarmg/media-backup/releases/0.3.6`，设为 root 所有，并再次
+4. 把经过校验的完整发行复制到 `/opt/isarmg/media-backup/releases/0.3.7`，设为 root 所有，并再次
    运行 installed-release 校验。
 5. 创建 `/var/lib/isarmg/media-backup/db` 与 `/var/lib/isarmg/media-backup/data`，权限为 `0750`，
    所有者为 `isarmg-media:isarmg-media`。
@@ -138,7 +138,7 @@ sudo ./scripts/setup-wsl.sh
 正常完成时固定布局为：
 
 ```text
-/opt/isarmg/media-backup/releases/0.3.6/   # root 拥有的不可变发行
+/opt/isarmg/media-backup/releases/0.3.7/   # root 拥有的不可变发行
 /etc/isarmg/media-backup.env              # root:root，0600，唯一可编辑配置
 /etc/systemd/system/media-backup.service  # root:root，0644，发行包中的 unit
 /var/lib/isarmg/media-backup/db/           # SQLite 状态
@@ -234,7 +234,7 @@ media.example.com {
 完成秘密替换、删除 marker 并配置反向代理后运行：
 
 ```bash
-sudo /opt/isarmg/media-backup/releases/0.3.6/scripts/start-server-wsl.sh
+sudo /opt/isarmg/media-backup/releases/0.3.7/scripts/start-server-wsl.sh
 ```
 
 该脚本会：
@@ -248,7 +248,7 @@ sudo /opt/isarmg/media-backup/releases/0.3.6/scripts/start-server-wsl.sh
 systemd 最终只执行固定命令：
 
 ```text
-/opt/isarmg/media-backup/releases/0.3.6/bin/media-backup-server serve-release /opt/isarmg/media-backup/releases/0.3.6
+/opt/isarmg/media-backup/releases/0.3.7/bin/media-backup-server serve-release /opt/isarmg/media-backup/releases/0.3.7
 ```
 
 服务进程会再次验证它确实物理位于该发行根内，然后才读取业务配置和创建运行状态。直接复制二进制到
@@ -257,7 +257,7 @@ systemd 最终只执行固定命令：
 若只想启动已有服务并持续查看 Journal，可运行：
 
 ```bash
-sudo /opt/isarmg/media-backup/releases/0.3.6/scripts/run-server-wsl.sh
+sudo /opt/isarmg/media-backup/releases/0.3.7/scripts/run-server-wsl.sh
 ```
 
 此脚本不会替代首次安装或首次启用；它同样先做发行、unit 和配置检查，再调用 `systemctl start`，最后
@@ -278,7 +278,7 @@ curl --fail http://127.0.0.1:8080/readyz
 使用包内验收脚本检查健康端点与管理页：
 
 ```bash
-/opt/isarmg/media-backup/releases/0.3.6/scripts/verify-server-wsl.sh
+/opt/isarmg/media-backup/releases/0.3.7/scripts/verify-server-wsl.sh
 ```
 
 默认检查 `http://127.0.0.1:8080`，并用 `X-Forwarded-Proto: https` 模拟可信代理语义。若监听地址或
@@ -287,7 +287,7 @@ curl --fail http://127.0.0.1:8080/readyz
 ```bash
 MEDIA_BACKUP_VERIFY_URL='http://127.0.0.1:18080' \
 MEDIA_BACKUP_VERIFY_FORWARDED_PROTO='https' \
-  /opt/isarmg/media-backup/releases/0.3.6/scripts/verify-server-wsl.sh
+  /opt/isarmg/media-backup/releases/0.3.7/scripts/verify-server-wsl.sh
 ```
 
 预期输出为 `health=200 admin_page=200`。该检查不能替代从真实公网域名验证证书链、DNS、代理、Cookie
@@ -438,7 +438,7 @@ Media Backup Server 发行包不执行备份、恢复、Schema 迁移、跨版�
 - [ ] 归档外部 SHA-256 来自可信渠道并已核对。
 - [ ] `release-identity` 与 `release-verify` 成功，产品、版本、target 和 source revision 正确。
 - [ ] 安装目标此前为空，没有通过覆盖、软链接或手工复制规避 no-clobber。
-- [ ] 发行位于固定 `/opt/isarmg/media-backup/releases/0.3.6`，未被在线编辑。
+- [ ] 发行位于固定 `/opt/isarmg/media-backup/releases/0.3.7`，未被在线编辑。
 - [ ] 配置位于 `/etc/isarmg/media-backup.env`，root 所有、`0600`、单硬链接。
 - [ ] 三个初始秘密已按不同用途安全保存或替换，初始化 marker 已删除。
 - [ ] Server 只监听受控地址，公网只能通过可信 TLS 反向代理访问。
@@ -449,4 +449,4 @@ Media Backup Server 发行包不执行备份、恢复、Schema 迁移、跨版�
 - [ ] 数据库与媒体容量、inode、日志、指标和证书到期监控已配置。
 - [ ] 一致性备份、隔离恢复演练和 `sarmg-upgrade` 责任人已明确。
 
-以上清单全部通过，才表示当前 `0.3.6` Server 发行具备上线条件。
+以上清单全部通过，才表示当前 `0.3.7` Server 发行具备上线条件。
