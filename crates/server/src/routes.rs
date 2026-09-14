@@ -1,6 +1,3 @@
-#[path = "../../../foundation/platform_router.rs"]
-mod foundation_platform;
-
 use axum::{
     body::Body,
     extract::{ConnectInfo, DefaultBodyLimit, Extension, Path, State},
@@ -217,7 +214,7 @@ pub fn router(
             require_secure_transport,
         ));
 
-    let platform = foundation_platform::platform_router(
+    let platform = sarmg_server_runtime::platform_router(
         runtime,
         "media-backup",
         state.administrator_origin,

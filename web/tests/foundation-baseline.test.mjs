@@ -1,4 +1,3 @@
-import "../shell/verify.mjs";
 import assert from "node:assert/strict";
 import "../fonts/verify.mjs";
 import "../appearance/verify.mjs";
@@ -21,14 +20,14 @@ assert.match(nodeVersion, /^26\.7\.0\n?$/);
 assertSarmgWebToolchain(manifest, nodeVersion);
 for (const name of foundationPackages) {
   const dependency = `@sarmg/${name}`;
-  const expected = `https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.7.6/sarmg-${name}-0.7.6.tgz`;
+  const expected = `https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.7.11/sarmg-${name}-0.7.11.tgz`;
   assert.equal(manifest.dependencies?.[dependency], expected);
   assert.equal(lock.packages?.[""]?.dependencies?.[dependency], expected);
 
   const locked = lock.packages?.[`node_modules/${dependency}`];
   assert.equal(locked?.link, undefined);
   assert.equal(locked?.resolved, expected);
-  assert.equal(locked?.version, "0.7.6");
+  assert.equal(locked?.version, "0.7.11");
   assert.match(locked?.integrity ?? "", /^sha512-[A-Za-z0-9+/]+={0,2}$/);
 }
 

@@ -203,7 +203,7 @@ HTTP 响应和发行身份校验，发行包 `share/web/` 必须包含相同字�
 失败重试、业务账户与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 Foundation `=0.7.6` / `89eafaf171e409e6134fa669b140f615635baf5a`；八个 Web 包使用
+当前 Server Rust 固定 Foundation `=0.7.11` / `8f2a5c888bc5f543186ad58bc5b3cee4dc5b2602`；八个 Web 包使用
 同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。独立 CI 已通过，含 Server archive、
 Android 编译及未签名 iOS 验证，见[消费者证据](https://github.com/isarmg/sarmg-foundation-server/blob/main/consumers/axum-0.7.0-evidence.md)。
 这不代表这些主分支改动已重新发布为移动端或 Server 制品，也不代替原生签名和目标运行验收。

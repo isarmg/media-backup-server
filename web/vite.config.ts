@@ -1,10 +1,8 @@
 import { createSarmgReactViteConfig } from "@sarmg/web-toolchain/vite";
 import { mergeConfig, type Plugin } from "vite";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 
 export default mergeConfig(createSarmgReactViteConfig({ base: "/admin/" }), {
-  resolve: { alias: [{ find: /^@sarmg\/admin-ui$/, replacement: fileURLToPath(new URL("./shell/ui.js", import.meta.url)) }] },
   plugins: [{
     name: "media-font-license",
     generateBundle() {
