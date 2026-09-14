@@ -499,7 +499,7 @@ checksum = "caf1079563223d5d59d83c85886a56e586cfd5c1a26292e971a0fa266531ac5a"
 
 [[package]]
 name = "fdeflate"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
@@ -1125,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "media-backup-protocol"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "media-backup-server"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "anyhow",
  "axum",
