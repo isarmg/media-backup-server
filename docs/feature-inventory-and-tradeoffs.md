@@ -1,6 +1,6 @@
 # Media Backup 完整功能与取舍清单
 
-本文按 Media Backup `0.3.9` 当前工作树盘点 Server、React 管理 Web、共享 Rust Client、Android、iOS、
+本文按 Media Backup `0.3.10` 当前工作树盘点 Server、React 管理 Web、共享 Rust Client、Android、iOS、
 协议、存储和交付闭包。代码、两个 `current_schema.sql`、移动 epoch、FFI header 和发行 manifest 是最终
 事实源；本文不把规划中的能力写成已实现功能。
 
@@ -45,7 +45,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-P-001 | Android/iOS 把授权范围内的照片、视频和设备生成缩略图备份到自托管 Server | `clients/android`、`clients/ios`、`crates/server` | 核心 | 高 | 项目不再是完整移动媒体备份系统 | 两平台至少一条原始媒体+缩略图端到端 |
 | MED-P-002 | Server 唯一支持 `x86_64-unknown-linux-gnu`，正式主机唯一为 Linux AMD64 | `sarmg-server-target`、server `build.rs`、release/systemd/scripts | 保障 | 高 | 会产生未经验证的 Server 平台制品 | 非目标编译、错误 ELF、错误 uname、systemd architecture |
 | MED-P-003 | Android/iOS 客户端继续按各自平台架构构建；“Server 仅 AMD64”不限制移动 ABI | Android NDK targets、Apple targets | 核心 | 高 | 若误删移动架构，真机无法加载 Rust core | arm64 Android/iOS；模拟器；ABI/header 一致 |
-| MED-P-004 | Server、移动 Client 和发行物只理解一个当前 `0.3.9` 身份 | metadata、mobile epoch、release identity | 保障 | 高 | 多代 parser 会扩大每次变更的状态矩阵 | 非当前 product/version/revision/epoch 零写入拒绝 |
+| MED-P-004 | Server、移动 Client 和发行物只理解一个当前 `0.3.10` 身份 | metadata、mobile epoch、release identity | 保障 | 高 | 多代 parser 会扩大每次变更的状态矩阵 | 非当前 product/version/revision/epoch 零写入拒绝 |
 | MED-P-005 | 产品不内置迁移、备份或恢复数据库命令；代际任务属于 `sarmg-upgrade` | Server CLI、Client open path | 保障 | 高 | 在线转换会把未知状态带入服务进程 | CLI 清单；Schema mismatch 只读失败 |
 | MED-P-006 | 源配置统一位于顶层 `config/`，部署资产位于 `deploy/`，客户端位于 `clients/` | 仓库目录 | 开发运维 | 低 | 事实源散落，脚本和文档容易引用不同文件 | `rg` 不引用已移除目录；release 仍可重映射到 `systemd/` |
 | MED-P-007 | React/Vite 管理客户端位于 `web/`；Android/iOS 原生客户端并列 | 目录结构、workspace scripts | 开发运维 | 低 | 客户端代码位置不一致，维护人员难以识别边界 | README、CI、构建脚本使用统一路径 |
@@ -202,7 +202,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 软件为 0.3.9，数据库 Schema identity 为 media-backup 0.3.0、revision 4、SHA `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 软件为 0.3.10，数据库 Schema identity 为 media-backup 0.3.0、revision 4、SHA `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-002 | Client 当前 Schema SHA 为 `fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558` | `client-core/database.rs` | 保障 | 高 | 手机队列状态不可证明 | Rust/Kotlin/Swift epoch 与 Schema identity |
 | MED-R-003 | 两个数据库都先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | 两个 `database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |
@@ -216,7 +216,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-R-012 | `build-server-release.sh` 只在 Linux AMD64 接受 64-bit little-endian x86_64 ELF | release script | 开发运维 | 中 | 文件名 target 与真实 ELF 可不一致 | ELF magic/class/endian/machine、wrong host |
 | MED-R-013 | 发行包包含 binary、配置样例、`deploy/media-backup.service` 映射出的 systemd、脚本、Web、FFI header 和必要文档 | build script | 开发运维 | 高 | 操作者拿到不完整或跨代部署单元 | expected exact layout、真实 verify-release |
 | MED-R-014 | systemd 使用 `isarmg-media`、flat `/etc/isarmg/media-backup.env`、ConditionArchitecture 和 sandbox | `deploy/media-backup.service` | 保障 | 高 | 错服务账号、配置路径或权限扩大主机攻击面 | `systemd-analyze verify`、实际 start、write paths |
-| MED-R-015 | 安装 no-clobber 固定 `/opt/isarmg/media-backup/releases/0.3.9`，环境 0600 | `setup-wsl.sh`、deployment tests | 保障 | 高 | 同版本覆盖会让运行内容不可追溯，Secret 权限过宽 | 首装/二次安装、concurrent、mode/owner |
+| MED-R-015 | 安装 no-clobber 固定 `/opt/isarmg/media-backup/releases/0.3.10`，环境 0600 | `setup-wsl.sh`、deployment tests | 保障 | 高 | 同版本覆盖会让运行内容不可追溯，Secret 权限过宽 | 首装/二次安装、concurrent、mode/owner |
 | MED-R-016 | CI 分别覆盖 Rust/Server release、Android、iOS 和移动静态合同 | `.github/workflows`、contract scripts | 开发运维 | 高 | 任一平台可在 wire/FFI 漂移时独立发布 | clean checkout jobs、平台矩阵、lock mode |
 | MED-R-017 | Rust 固定 1.98.0；Web Node/toolchain 与 Cargo/npm locks 均固定 | toolchain/version/lock files | 开发运维 | 中 | 解析随时间变化，制品难复现 | `--locked`、`npm ci`、version output |
 | MED-R-018 | 中文 README、学习、流程、功能取舍和运维文档是发行/维护闭包 | `README.md`、`docs/` | 开发运维 | 低 | 跨五种语言/平台的知识只能口头传递 | 链接、命令、代码锚点和 schema hash 抽查 |
@@ -280,5 +280,5 @@ Server 与 Client 在打开状态前先验证唯一当前 Schema 和身份。发
 ## 图库扩展实施补充
 
 本次新增全库类型/日期/设备筛选、UUID 快照水位、资产/资源/标签批量 SQL、1600 像素派生预览，
-以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API 扩展](https://github.com/isarmg/media-backup-server/blob/v0.3.9/docs/gallery-api.md)。
+以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API 扩展](https://github.com/isarmg/media-backup-server/blob/v0.3.10/docs/gallery-api.md)。
 移动实现以 Client 0.4.0 的实施记录为准，本文原移动端清单描述的是改造前快照。
