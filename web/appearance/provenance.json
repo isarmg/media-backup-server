@@ -5,6 +5,6 @@
   "source": "sarmg-foundation-server/packages/admin-ui/content-blocks.css",
   "origin": "union-rust/web/vendor/sarmg-design (Apache-2.0, sarmg)",
   "license": "Apache-2.0",
-  "distribution": "Reviewed source snapshot; published npm dependencies pinned to Foundation 0.8.1",
+  "distribution": "Reviewed source snapshot; published npm dependencies pinned to Foundation 0.8.2",
   "sha256": "44a3c42ce0f1eed5cb0d76230fa2fed53560a866c61247bd792c85d09d5aa253"
 }
