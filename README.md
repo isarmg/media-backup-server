@@ -49,6 +49,7 @@ Server 管理身份采用 Foundation 当前 `username` 合同：登录只接受 
 
 - [仓库边界](docs/repository-boundary.md)
 - [完整功能与取舍清单](docs/feature-inventory-and-tradeoffs.md)
+- [接口与消费者边界](docs/interface-consumers.md)
 - [部署、诊断、安全与发布运维](docs/operations.md)
 
 ## 许可证
