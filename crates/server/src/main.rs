@@ -179,7 +179,6 @@ async fn build_state(
         sarmg_admin_sqlite::SqliteAdministratorStore::new(pool.clone()),
     ));
     use sarmg_admin_core::AdministratorStore as _;
-    administrator.store().validate_all_administrators().await?;
     if administrator.store().administrator_count().await? == 0 {
         let password = config
             .bootstrap_admin_password
@@ -194,6 +193,7 @@ async fn build_state(
             .await
             .map_err(|error| anyhow::anyhow!(error))?;
     }
+    administrator.store().validate_all_administrators().await?;
     let administrator_origin = if config.development {
         sarmg_admin_auth::AdministratorOriginMode::LoopbackDevelopmentHttp
     } else {
