@@ -4,7 +4,7 @@ set -euo pipefail
 release_tag="${1:-${GITHUB_REF_NAME:-}}"
 
 if ! [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "Release tag must be a semantic version such as v0.3.15 (received: ${release_tag:-<empty>})." >&2
+  echo "Release tag must be a semantic version such as v0.3.16 (received: ${release_tag:-<empty>})." >&2
   exit 1
 fi
 

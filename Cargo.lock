@@ -1125,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "media-backup-protocol"
-version = "0.3.15"
+version = "0.3.16"
 dependencies = [
  "serde",
  "serde_json",
@@ -1134,7 +1134,7 @@ dependencies = [
 
 [[package]]
 name = "media-backup-server"
-version = "0.3.15"
+version = "0.3.16"
 dependencies = [
  "anyhow",
  "axum",
