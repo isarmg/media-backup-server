@@ -35,7 +35,18 @@ function Application() {
   const [generation, setGeneration] = useState(0);
   const [selected, setSelected] = useState<string | null>(selectedUserFromLocation);
   const [creating, setCreating] = useState(false);
+  const [createFailure, setCreateFailure] = useState<Failure | null>(null);
   const reload = () => setGeneration(value => value + 1);
+  async function createInstance() {
+    if (creating) return;
+    setCreating(true); setCreateFailure(null); window.location.hash = "instances";
+    try {
+      await request("/api/v2/admin/instances", isBackupInstance, { method: "POST", body: "{}" });
+      reload(); notify(t("备份实例已创建，可在详细信息中查看密码", "Backup instance created. Its password is available in details"));
+    } catch (error) { setCreateFailure({ requestId: errorRequestId(error) }); }
+    finally { setCreating(false); }
+  }
+  const { notify } = useAdminApplication();
   useEffect(() => {
     const changed = () => { setView(currentView()); setSelected(selectedUserFromLocation()); }; window.addEventListener("hashchange", changed);
     return () => window.removeEventListener("hashchange", changed);
@@ -49,13 +60,13 @@ function Application() {
   }, [generation, view]);
   const user = overview?.users.find(item => item.id === selected);
   return <div className="media-business sarmg-content-stack">
-    <InstanceHeaderActions create={() => setCreating(true)} refresh={reload} />
+    <InstanceHeaderActions create={() => void createInstance()} refresh={reload} refreshing={creating} />
     <InstancePageNavigation page={view} detailsDisabled={!selected} navigate={value => { window.location.hash = value === "details" && selected ? `details/${encodeURIComponent(selected)}` : value; }} />
     <h1 className="sarmg-visually-hidden">{view === "instances" ? t("备份实例列表", "Backup instance list") : view === "details" ? t("备份详细信息", "Backup details") : t("备份日志", "Backup logs")}</h1>
+    {createFailure && <ErrorState requestId={createFailure.requestId}>{t("实例未能创建，请刷新列表核对后重试。", "The instance could not be created. Refresh the list before retrying.")}</ErrorState>}
     {failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
       : overview === null ? <LoadingState>{t("正在载入备份数据…", "Loading backup data…")}</LoadingState>
       : view === "instances" ? <OverviewView overview={overview} reload={reload} /> : view === "logs" ? <LogsView /> : <><a href="#instances">{t("返回实例列表", "Back to instance list")}</a>{user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("请选择一个备份实例。", "Select a backup instance.")}</EmptyState>}</>}
-    {creating && <CreateBackupInstanceDialog close={() => setCreating(false)} reload={reload} />}
   </div>;
 }
 
@@ -144,33 +155,6 @@ function BackupUserForm({ user, reload }: { user: BackupUser; reload(): void }) 
   </article>;
 }
 
-function CreateBackupInstanceDialog({ close, reload }: { close(): void; reload(): void }) {
-  const { notify } = useAdminApplication();
-  const busy = useRef(false);
-  const [pending, setPending] = useState(false);
-  const [failure, setFailure] = useState<Failure | null>(null);
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy.current) return;
-    const data = new FormData(event.currentTarget);
-    busy.current = true; setPending(true); setFailure(null);
-    try {
-      await request("/api/v2/admin/instances", isBackupInstance, { method: "POST", body: JSON.stringify({
-        name: String(data.get("name") ?? "").trim(),
-      }) });
-      reload(); close(); notify(t("备份实例已创建，可在详细信息中查看授权码", "Backup instance created. Its authorization code is available in details"));
-    } catch (error) { setFailure({ requestId: errorRequestId(error) }); }
-    finally { busy.current = false; setPending(false); }
-  }
-  return <Dialog title={t("新建备份实例", "Create backup instance")} description={t("填写名称后会直接生成实例和长期授权码；存储路径自动分配，配额可在详情中调整。", "Enter a name to create the instance and its long-lived authorization code. Storage is allocated automatically, and quota can be changed in details.")} onClose={() => { if (!busy.current) close(); }}>
-    <form aria-label={t("创建备份实例", "Create backup instance")} aria-busy={pending} onSubmit={event => void submit(event)}>
-      {failure && <ErrorState requestId={failure.requestId}>{t("实例未能创建，请检查名称后重试。", "The instance could not be created. Check its name, then retry.")}</ErrorState>}
-      <FormField label={t("实例名称", "Instance name")}><InstanceNameField name="name" required readOnly={pending} data-sarmg-initial-focus /></FormField>
-      <div className="sarmg-actions"><Button disabled={pending} onClick={close}>{t("取消", "Cancel")}</Button><Button type="submit" disabled={pending}>{pending ? t("正在创建…", "Creating…") : t("创建实例", "Create instance")}</Button></div>
-    </form>
-  </Dialog>;
-}
-
 function InstanceManager({ user, reload }: { user: BackupUser; reload(): void }) {
   const { notify } = useAdminApplication();
   const [pending, setPending] = useState(false);
@@ -198,7 +182,7 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
     <h2>{t("客户端配对", "Client pairing")}</h2>
     <p>{t("实例拥有一个长期客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "The instance owns one long-lived client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
     {failure?.action === "rotate" && <ErrorState requestId={failure.requestId}>{t("未能更换授权码，请重试。", "Unable to change the authorization code. Please retry.")}</ErrorState>}
-    {user.instances.length === 0 ? <EmptyState>{t("这是旧版未完成的记录，没有客户端授权码；请新建备份实例。", "This legacy incomplete entry has no client authorization code. Create a new backup instance.")}</EmptyState> : <Table aria-label={t("客户端配对信息", "Client pairing information")}><thead><tr><th>{t("名称", "Name")}</th><th>{t("状态", "Status")}</th><th>{t("授权码", "Authorization code")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><td>{instance.name}</td><td><StatusBadge status={instance.status} /></td><td><code>{instance.authorization_code}</code></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换授权码", "Change code")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
+    {user.instances.length === 0 ? <EmptyState>{t("这是旧版未完成的记录，没有客户端授权码；请新建备份实例。", "This legacy incomplete entry has no client authorization code. Create a new backup instance.")}</EmptyState> : <Table aria-label={t("客户端配对信息", "Client pairing information")}><thead><tr><th>{t("账户名", "Account name")}</th><th>{t("账户", "Account")}</th><th>{t("密码", "Password")}</th><th>{t("状态", "Status")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><th scope="row">{instance.name}</th><td><code>{instance.id}</code></td><td><code>{instance.authorization_code}</code></td><td><StatusBadge status={instance.status} /></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换密码", "Change password")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
     {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) { setRemove(null); setFailure(null); } }} onConfirm={() => void removeInstance(remove)}>{failure?.action === "remove" && <ErrorState requestId={failure.requestId}>{terminal ? t("实例仍有备份记录或暂时无法删除，请处理后重试。", "The instance still owns backup records or cannot currently be deleted. Resolve the issue and retry.") : t("未能取消或撤销实例，请重试。", "Unable to cancel or revoke the instance. Please retry.")}</ErrorState>}</ConfirmDangerDialog>; })()}
   </section>;
 }
@@ -227,7 +211,7 @@ function bytes(value: number): string {
   return value + " B";
 }
 const Root = createSarmgAdminApplication({ product: { name: "Media Backup" }, client: administratorApi,
-  navigation: [], routes: <Application /> });
+  navigation: [], loginLandingHref: "#instances", routes: <Application /> });
 const root = document.getElementById("root");
 if (root === null) throw new Error("缺少 React 根节点");
 createRoot(root).render(<StrictMode><Root /></StrictMode>);

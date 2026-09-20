@@ -22,7 +22,7 @@ async function assertColumnContentAlignment(table) {
   assert.ok(offsets.every(offset => offset < 0.5), `column content offsets: ${JSON.stringify(offsets)}`);
 }
 const time = "2026-09-04T00:00:00Z", userId = "018f1f4b-7a5d-7b5f-8d31-123456789abc";
-const instanceId = "018f1f4b-7a5d-7b5f-8d31-123456789abd", code = "m".repeat(43);
+const instanceId = "018f1f4b-7a5d-7b5f-8d31-123456789abd", code = "m".repeat(32);
 function instance(overrides = {}) {
   return { id: instanceId, name: "验收手机", platform: "android", status: "pending", online: false, authorization_code: code, created_at: time, last_seen_at: "", ...overrides };
 }
@@ -58,10 +58,10 @@ try {
         if (path === "/api/v2/admin/logs") return route.fulfill({ json: [{ sequence: 1, action: "backup.instance.create", entity_id: instanceId, occurred_at: time }] });
         if (path === "/api/v2/admin/instances" && method === "POST") {
           const input = request.postDataJSON();
-          assert.deepEqual(Object.keys(input), ["name"]);
+          assert.deepEqual(input, {});
           if (failCreate) { failCreate = false; return route.fulfill({ status: 500, json: { code: "platform.internal", message: "SECRET", retryable: false, request_id: "create-failure-123" } }); }
-          const created = instance({ id: "018f1f4b-7a5d-7b5f-8d31-000000000001", name: input.name, authorization_code: "n".repeat(43) });
-          users.push(backupUser({ id: "018f1f4b-7a5d-7b5f-8d31-123456789abe", username: "instance-internal", display_name: input.name,
+          const created = instance({ id: "018f1f4b-7a5d-7b5f-8d31-000000000001", name: "新实例", authorization_code: "n".repeat(32) });
+          users.push(backupUser({ id: "018f1f4b-7a5d-7b5f-8d31-123456789abe", username: "instance-internal", display_name: "新实例",
             storage_path: "blobs/automatic", quota_bytes: 107374182400, instances: [created], used_bytes: 0, pending_bytes: 0, device_count: 1, resource_count: 0 }));
           return route.fulfill({ status: 201, json: created });
         }
@@ -69,7 +69,7 @@ try {
         if (rotateMatch && method === "PUT") {
           if (failRotate) { failRotate = false; return route.fulfill({ status: 503, json: { code: "service_unavailable", message: "SECRET rotate", retryable: true, request_id: "rotate-failure-123" } }); }
           const target = users.flatMap(user => user.instances).find(item => item.id === rotateMatch[1]);
-          Object.assign(target, { authorization_code: "r".repeat(43), status: "pending" });
+          Object.assign(target, { authorization_code: "r".repeat(32), status: "pending" });
           return route.fulfill({ json: target });
         }
         const removeMatch = path.match(/^\/api\/v2\/admin\/instances\/([^/]+)$/);
@@ -108,21 +108,13 @@ try {
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
       await page.getByRole("button", { name: "新建实例", exact: true }).click();
-      const create = page.getByRole("form", { name: "创建备份实例", exact: true });
-      await expect(create.getByLabel("密码")).toHaveCount(0);
-      await expect(create.getByLabel("账号", { exact: true })).toHaveCount(0);
-      await create.getByLabel("实例名称", { exact: true }).fill("新建备份实例");
-      await expect(create.getByLabel("存储路径（留空自动分配）", { exact: true })).toHaveCount(0);
-      await expect(create.getByLabel("配额（GiB，0 表示不限）", { exact: true })).toHaveCount(0);
-      await create.getByRole("button", { name: "创建实例", exact: true }).click();
-      await expect(create.getByRole("alert")).toContainText("create-failure-123");
+      await expect(page.getByRole("alert")).toContainText("create-failure-123");
       await expect(page.locator("body")).not.toContainText("SECRET");
-      await create.getByRole("button", { name: "创建实例", exact: true }).click();
-      await expect(page.getByRole("dialog", { name: "新建备份实例", exact: true })).toHaveCount(0);
+      await page.getByRole("button", { name: "新建实例", exact: true }).click();
       await expect(page.getByRole("button", { name: "关闭通知", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "关闭通知", exact: true })).toHaveCount(0, { timeout: 7_000 });
-      await expect(page.getByRole("link", { name: "新建备份实例", exact: true })).toBeVisible();
-      const createdRow = instanceTable.locator("tbody tr").filter({ has: page.getByRole("link", { name: "新建备份实例", exact: true }) });
+      await expect(page.getByRole("link", { name: "新实例", exact: true })).toBeVisible();
+      const createdRow = instanceTable.locator("tbody tr").filter({ has: page.getByRole("link", { name: "新实例", exact: true }) });
       await createdRow.getByRole("button", { name: "删除", exact: true }).click();
       await createdRow.getByRole("button", { name: "取消", exact: true }).click();
       await expect(createdRow.getByRole("button", { name: "确认删除", exact: true })).toHaveCount(0);
@@ -132,11 +124,11 @@ try {
       await expect(page.getByRole("form", { name: "编辑备份实例 验收备份账户", exact: true }).getByLabel("密码")).toHaveCount(0);
       await expect(page.getByRole("complementary")).toHaveCount(0);
       await expect(page.getByText(code, { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
+      await page.getByRole("button", { name: "更换密码", exact: true }).click();
       await expect(page.getByRole("alert")).toContainText("rotate-failure-123");
       await expect(page.locator("body")).not.toContainText("SECRET rotate");
-      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
-      await expect(page.getByText("r".repeat(43), { exact: true })).toBeVisible();
+      await page.getByRole("button", { name: "更换密码", exact: true }).click();
+      await expect(page.getByText("r".repeat(32), { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "取消配对", exact: true }).click();
       await page.getByRole("button", { name: "确认", exact: true }).click();
       await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
@@ -153,8 +145,9 @@ try {
       await page.getByRole("button", { name: "日志", exact: true }).click();
       await expect(page.getByText("backup.instance.create", { exact: true })).toBeVisible();
       await page.goto(`http://127.0.0.1:${address.port}/admin/#details/018f1f4b-7a5d-7b5f-8d31-123456789abe`);
-      await expect(page.getByRole("form", { name: "编辑备份实例 新建备份实例", exact: true })).toBeVisible();
-      await checkWebLanguage(page, { routes: [["details/018f1f4b-7a5d-7b5f-8d31-123456789abe", "Details"], ["instances", "Instance list"], ["logs", "Logs"]], names: ["新建备份实例"] });
+      await expect(page.getByRole("button", { name: "详细信息", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByRole("form", { name: "编辑备份实例 新实例", exact: true })).toBeVisible();
+      await checkWebLanguage(page, { routes: [["details/018f1f4b-7a5d-7b5f-8d31-123456789abe", "Details"], ["instances", "Instance list"], ["logs", "Logs"]], names: ["新实例"] });
       assert.ok(mutations.some(item => item.path.endsWith("/authorization")));
       assert.deepEqual(errors, []);
       console.log(`${engine.name()}: atomic instance creation, details/logs, authorization rotation, cancel/delete, direct language switch and WCAG passed`);

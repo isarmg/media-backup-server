@@ -1,7 +1,7 @@
 {
   "name": "media-backup-web",
   "private": true,
-  "version": "0.3.14",
+  "version": "0.3.15",
   "type": "module",
   "engines": {
     "node": ">=26.7.0 <27"
@@ -14,14 +14,14 @@
     "test:browser": "npm run build && node tests/browser-acceptance.mjs"
   },
   "dependencies": {
-    "@sarmg/admin-web": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-admin-web-0.8.5.tgz",
-    "@sarmg/admin-shell": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-admin-shell-0.8.5.tgz",
-    "@sarmg/admin-ui": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-admin-ui-0.8.5.tgz",
-    "@sarmg/contracts": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-contracts-0.8.5.tgz",
-    "@sarmg/design-tokens": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-design-tokens-0.8.5.tgz",
-    "@sarmg/http-client": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-http-client-0.8.5.tgz",
-    "@sarmg/web-fonts": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-web-fonts-0.8.5.tgz",
-    "@sarmg/web-toolchain": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-web-toolchain-0.8.5.tgz",
+    "@sarmg/admin-web": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-admin-web-0.8.8.tgz",
+    "@sarmg/admin-shell": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-admin-shell-0.8.8.tgz",
+    "@sarmg/admin-ui": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-admin-ui-0.8.8.tgz",
+    "@sarmg/contracts": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-contracts-0.8.8.tgz",
+    "@sarmg/design-tokens": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-design-tokens-0.8.8.tgz",
+    "@sarmg/http-client": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-http-client-0.8.8.tgz",
+    "@sarmg/web-fonts": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-web-fonts-0.8.8.tgz",
+    "@sarmg/web-toolchain": "https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.8/sarmg-web-toolchain-0.8.8.tgz",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

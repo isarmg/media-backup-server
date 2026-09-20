@@ -5,7 +5,6 @@ use axum::{
     response::{Html, IntoResponse, Response},
     Json,
 };
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -17,7 +16,7 @@ use crate::{error::AppError, routes::AppState};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreateInstanceRequest {
-    name: String,
+    name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -143,7 +142,7 @@ pub(crate) async fn create_instance(
 ) -> Result<(StatusCode, Json<AdminInstance>), AppError> {
     let account_id = Uuid::new_v4();
     let id = Uuid::new_v4();
-    let name = request.name.trim();
+    let name = request.name.as_deref().unwrap_or("新实例").trim();
     let storage_path = format!("blobs/{account_id}");
     let quota_bytes = 100 * 1024 * 1024 * 1024_i64;
     validate_policy(name, &storage_path, quota_bytes)?;
@@ -285,9 +284,21 @@ async fn write_instance_audit(
 }
 
 fn random_authorization_code() -> String {
-    let mut bytes = [0_u8; 32];
-    OsRng.fill_bytes(&mut bytes);
-    URL_SAFE_NO_PAD.encode(bytes)
+    const ALPHABET: &[u8; 36] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let mut value = String::with_capacity(32);
+    let mut bytes = [0_u8; 64];
+    while value.len() < 32 {
+        OsRng.fill_bytes(&mut bytes);
+        for byte in bytes {
+            if byte < 252 {
+                value.push(ALPHABET[usize::from(byte % 36)] as char);
+                if value.len() == 32 {
+                    break;
+                }
+            }
+        }
+    }
+    value
 }
 
 async fn load_instance(state: &AppState, id: Uuid) -> Result<Json<AdminInstance>, AppError> {
@@ -303,7 +314,7 @@ async fn load_instances(
     state: &AppState,
     only: Option<Uuid>,
 ) -> Result<Vec<AdminInstance>, AppError> {
-    let rows = sqlx::query("SELECT id,account_id,name,platform,pairing_status,(pairing_status='paired' AND last_seen_at IS NOT NULL AND last_seen_at>=datetime('now','-10 minutes')) online,authorization_code_enc,strftime('%Y-%m-%dT%H:%M:%SZ',created_at) created_at,COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',last_seen_at),'') last_seen_at FROM devices WHERE (? IS NULL OR id=?) ORDER BY created_at")
+    let rows = sqlx::query("SELECT id,account_id,name,platform,pairing_status,(pairing_status='paired' AND last_seen_at IS NOT NULL AND last_seen_at>=datetime('now','-10 minutes')) online,authorization_code_enc,strftime('%Y-%m-%dT%H:%M:%SZ',created_at) created_at,COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',last_seen_at),'') last_seen_at FROM devices WHERE (? IS NULL OR id=?) ORDER BY name COLLATE NOCASE,name,id")
         .bind(only).bind(only).fetch_all(&state.pool).await?;
     rows.into_iter()
         .map(|row| {
@@ -335,7 +346,7 @@ async fn load_users(state: &AppState) -> Result<Vec<AdminUser>, AppError> {
          (SELECT COUNT(*) FROM devices d WHERE d.account_id=a.id) AS device_count, \
          (SELECT COUNT(*) FROM resources r JOIN assets s ON s.id=r.asset_id WHERE s.account_id=a.id) AS resource_count, \
          COALESCE(strftime('%Y-%m-%dT%H:%M:%SZ',(SELECT MAX(d.last_seen_at) FROM devices d WHERE d.account_id=a.id)),'') AS last_seen_at \
-         FROM accounts a ORDER BY a.created_at ASC",
+         FROM accounts a ORDER BY a.display_name COLLATE NOCASE,a.display_name,a.id",
     ).fetch_all(&state.pool).await?;
     let instances = load_instances(state, None).await?;
     let mut users = rows.into_iter().map(row_to_user).collect::<Vec<_>>();
@@ -545,12 +556,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn generated_authorization_codes_have_the_shared_format() {
+        for _ in 0..64 {
+            let value = random_authorization_code();
+            assert_eq!(value.len(), 32);
+            assert!(value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase()));
+        }
+    }
+
+    #[test]
     fn instance_name_policy_counts_unicode_characters() {
         for character in ["a", "中", "あ", "😀"] {
             assert!(validate_policy(&character.repeat(32), "blobs/test", 0).is_ok());
             assert!(validate_policy(&character.repeat(33), "blobs/test", 0).is_err());
         }
         assert!(validate_policy("bad\nname", "blobs/test", 0).is_err());
+    }
+
+    #[test]
+    fn create_request_uses_the_server_default_when_name_is_omitted() {
+        let request: CreateInstanceRequest = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert!(request.name.is_none());
+        assert!(serde_json::from_value::<CreateInstanceRequest>(
+            serde_json::json!({"other": true})
+        )
+        .is_err());
     }
 
     #[tokio::test]

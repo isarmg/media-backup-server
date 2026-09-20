@@ -231,8 +231,7 @@ async fn bootstrap(
     Json(request): Json<BootstrapRequest>,
 ) -> Result<Json<BootstrapResponse>, AppError> {
     let authorization_code = request.authorization_code.trim();
-    if authorization_code.len() < 32
-        || authorization_code.len() > 128
+    if !valid_pairing_authorization_code(authorization_code)
         || request.device_name.trim().is_empty()
         || request.platform.trim().is_empty()
     {
@@ -294,6 +293,17 @@ async fn bootstrap(
         device_id,
         bearer_token,
     }))
+}
+
+fn valid_pairing_authorization_code(value: &str) -> bool {
+    (value.len() == 32
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase()))
+        || (value.len() == 43
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')))
 }
 
 async fn create_upload(
