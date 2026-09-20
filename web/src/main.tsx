@@ -10,7 +10,6 @@ import "@sarmg/design-tokens/accessibility.css";
 import "../fonts/fonts.css";
 import "@sarmg/admin-ui/styles.css";
 import "./styles.css";
-import "../appearance/content-blocks.css";
 import { administratorApi, isBackupInstance, isBackupUser, isOverview, isUndefined, request, type BackupInstance, type BackupUser, type Overview } from "./api";
 
 type Failure = { requestId?: string };

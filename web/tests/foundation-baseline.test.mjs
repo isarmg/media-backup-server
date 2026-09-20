@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import "../fonts/verify.mjs";
-import "../appearance/verify.mjs";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { assertSarmgWebToolchain } from "@sarmg/web-toolchain";
 import manifest from "../package.json" with { type: "json" };
@@ -29,6 +28,11 @@ for (const name of foundationPackages) {
   assert.equal(locked?.resolved, expected);
   assert.equal(locked?.version, "0.8.2");
   assert.match(locked?.integrity ?? "", /^sha512-[A-Za-z0-9+/]+={0,2}$/);
+}
+const adminStyles = readFileSync(new URL("../node_modules/@sarmg/admin-ui/dist/styles.css", import.meta.url), "utf8");
+assert.match(adminStyles, /@import ["']\.\/content-blocks\.css["']/);
+for (const snapshot of ["content-blocks.css", "provenance.json", "verify.mjs"]) {
+  assert.equal(existsSync(new URL(`../appearance/${snapshot}`, import.meta.url)), false, "Foundation CSS must not be copied into the product");
 }
 
 const main = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");

@@ -6,7 +6,7 @@ readonly project_dir
 readonly binary="${1:-}"
 readonly source_revision="${2:-}"
 readonly output_arg="${3:-}"
-readonly version="0.3.13"
+readonly version="0.3.14"
 readonly target="x86_64-unknown-linux-gnu"
 readonly package="media-backup-server-$version-$target"
 readonly release_contract_sha256="710a84e9343423d5acf2f1b5005409c1f14901ddd276d637965de31cf072a8a5"
