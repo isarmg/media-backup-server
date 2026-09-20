@@ -167,25 +167,31 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
   const { notify } = useAdminApplication();
   const [pending, setPending] = useState(false);
   const [remove, setRemove] = useState<BackupInstance | null>(null);
+  const [failure, setFailure] = useState<{ action: "rotate" | "remove"; requestId?: string } | null>(null);
   async function rotate(instance: BackupInstance) {
-    setPending(true);
+    setPending(true); setFailure(null);
     try {
       await request(`/api/v2/admin/instances/${instance.id}/authorization`, isBackupInstance, { method: "PUT" });
       notify(t("授权码已更换，客户端必须重新配对", "Authorization code changed; the client must pair again")); reload();
+    } catch (error) {
+      setFailure({ action: "rotate", requestId: errorRequestId(error) });
     } finally { setPending(false); }
   }
   async function removeInstance(instance: BackupInstance) {
-    setPending(true);
+    setPending(true); setFailure(null);
     try {
       await request(`/api/v2/admin/instances/${instance.id}`, isUndefined, { method: "DELETE" });
-      notify(instance.status === "cancelled" || instance.status === "revoked" ? t("实例信息已删除", "Instance entry deleted") : t("实例已取消或撤销，可再次删除其信息", "Instance cancelled or revoked; delete it again to remove its entry")); reload();
-    } finally { setPending(false); setRemove(null); }
+      notify(instance.status === "cancelled" || instance.status === "revoked" ? t("实例信息已删除", "Instance entry deleted") : t("实例已取消或撤销，可再次删除其信息", "Instance cancelled or revoked; delete it again to remove its entry")); setRemove(null); reload();
+    } catch (error) {
+      setFailure({ action: "remove", requestId: errorRequestId(error) });
+    } finally { setPending(false); }
   }
   return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("客户端实例", "Client instances")}>
     <h2>{t("客户端配对", "Client pairing")}</h2>
     <p>{t("实例拥有一个长期客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "The instance owns one long-lived client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
-    {user.instances.length === 0 ? <EmptyState>{t("这是旧版未完成的记录，没有客户端授权码；请新建备份实例。", "This legacy incomplete entry has no client authorization code. Create a new backup instance.")}</EmptyState> : <Table aria-label={t("客户端配对信息", "Client pairing information")}><thead><tr><th>{t("名称", "Name")}</th><th>{t("状态", "Status")}</th><th>{t("授权码", "Authorization code")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><td>{instance.name}</td><td><StatusBadge status={instance.status} /></td><td><code>{instance.authorization_code}</code></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换授权码", "Change code")}</Button>}<Button disabled={pending} onClick={() => setRemove(instance)}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
-    {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) setRemove(null); }} onConfirm={() => void removeInstance(remove)} />; })()}
+    {failure?.action === "rotate" && <ErrorState requestId={failure.requestId}>{t("未能更换授权码，请重试。", "Unable to change the authorization code. Please retry.")}</ErrorState>}
+    {user.instances.length === 0 ? <EmptyState>{t("这是旧版未完成的记录，没有客户端授权码；请新建备份实例。", "This legacy incomplete entry has no client authorization code. Create a new backup instance.")}</EmptyState> : <Table aria-label={t("客户端配对信息", "Client pairing information")}><thead><tr><th>{t("名称", "Name")}</th><th>{t("状态", "Status")}</th><th>{t("授权码", "Authorization code")}</th><th>{t("平台", "Platform")}</th><th>{t("操作", "Actions")}</th></tr></thead><tbody>{user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <tr key={instance.id}><td>{instance.name}</td><td><StatusBadge status={instance.status} /></td><td><code>{instance.authorization_code}</code></td><td>{instance.platform}</td><td>{!terminal && <Button disabled={pending} onClick={() => void rotate(instance)}>{t("更换授权码", "Change code")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></td></tr>; })}</tbody></Table>}
+    {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) { setRemove(null); setFailure(null); } }} onConfirm={() => void removeInstance(remove)}>{failure?.action === "remove" && <ErrorState requestId={failure.requestId}>{terminal ? t("实例仍有备份记录或暂时无法删除，请处理后重试。", "The instance still owns backup records or cannot currently be deleted. Resolve the issue and retry.") : t("未能取消或撤销实例，请重试。", "Unable to cancel or revoke the instance. Please retry.")}</ErrorState>}</ConfirmDangerDialog>; })()}
   </section>;
 }
 

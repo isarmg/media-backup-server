@@ -171,7 +171,7 @@ def main() -> None:
         fail("binary release identity has an unknown or missing field")
     fixed_identity = {
         "product": "media-backup-server",
-        "version": "0.3.12",
+        "version": "0.3.13",
         "source_revision": revision,
         "target": "x86_64-unknown-linux-gnu",
         "api_version": "v2",

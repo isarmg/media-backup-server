@@ -25,7 +25,7 @@ try {
     try {
       const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 390, height: 844 } });
       const page = await context.newPage(), errors = [], mutations = [];
-      let users = [backupUser()], failCreate = true;
+      let users = [backupUser()], failCreate = true, failRotate = true, failDelete = true;
       page.on("pageerror", error => errors.push(error.message));
       await page.route("**/api/v2/**", async route => {
         const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
@@ -51,17 +51,23 @@ try {
         }
         const rotateMatch = path.match(/^\/api\/v2\/admin\/instances\/([^/]+)\/authorization$/);
         if (rotateMatch && method === "PUT") {
+          if (failRotate) { failRotate = false; return route.fulfill({ status: 503, json: { code: "service_unavailable", message: "SECRET rotate", retryable: true, request_id: "rotate-failure-123" } }); }
           const target = users.flatMap(user => user.instances).find(item => item.id === rotateMatch[1]);
           Object.assign(target, { authorization_code: "r".repeat(43), status: "pending" });
           return route.fulfill({ json: target });
         }
         const removeMatch = path.match(/^\/api\/v2\/admin\/instances\/([^/]+)$/);
         if (removeMatch && method === "DELETE") {
+          const target = users.flatMap(user => user.instances).find(item => item.id === removeMatch[1]);
+          if (failDelete && (target?.status === "cancelled" || target?.status === "revoked")) {
+            failDelete = false;
+            return route.fulfill({ status: 409, json: { code: "conflict", message: "SECRET backup path", retryable: false, request_id: "delete-failure-123" } });
+          }
           for (const [userIndex, user] of users.entries()) {
-            const target = user.instances.find(item => item.id === removeMatch[1]);
-            if (!target) continue;
-            if (target.status === "cancelled" || target.status === "revoked") users.splice(userIndex, 1);
-            else target.status = target.status === "pending" ? "cancelled" : "revoked";
+            const current = user.instances.find(item => item.id === removeMatch[1]);
+            if (!current) continue;
+            if (current.status === "cancelled" || current.status === "revoked") users.splice(userIndex, 1);
+            else current.status = current.status === "pending" ? "cancelled" : "revoked";
           }
           return route.fulfill({ status: 204 });
         }
@@ -98,12 +104,20 @@ try {
       await expect(page.getByRole("complementary")).toHaveCount(0);
       await expect(page.getByText(code, { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "更换授权码", exact: true }).click();
+      await expect(page.getByRole("alert")).toContainText("rotate-failure-123");
+      await expect(page.locator("body")).not.toContainText("SECRET rotate");
+      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
       await expect(page.getByText("r".repeat(43), { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "取消配对", exact: true }).click();
       await page.getByRole("button", { name: "确认", exact: true }).click();
       await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
       await page.getByRole("button", { name: "删除实例", exact: true }).click();
       await page.getByRole("button", { name: "确认", exact: true }).click();
+      const deleteDialog = page.getByRole("dialog", { name: "删除实例", exact: true });
+      await expect(deleteDialog).toBeVisible();
+      await expect(deleteDialog.getByRole("alert")).toContainText("delete-failure-123");
+      await expect(page.locator("body")).not.toContainText("SECRET backup path");
+      await deleteDialog.getByRole("button", { name: "确认", exact: true }).click();
       await expect(page.getByText("请选择一个备份实例。", { exact: true })).toBeVisible();
 
       await page.getByRole("button", { name: "日志", exact: true }).click();
