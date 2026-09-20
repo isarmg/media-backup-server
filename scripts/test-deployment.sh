@@ -4,7 +4,7 @@ set -euo pipefail
 readonly archive_arg="${1:-${MEDIA_BACKUP_RELEASE_ARCHIVE:-}}"
 readonly package="media-backup-server-0.3.13-x86_64-unknown-linux-gnu"
 readonly version="0.3.13"
-readonly contract="d176782933ff81c8b92dab187d3bcce4e7dbf9e6928b053bd0e6f878fb44cb44"
+readonly contract="710a84e9343423d5acf2f1b5005409c1f14901ddd276d637965de31cf072a8a5"
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly project_dir
 
