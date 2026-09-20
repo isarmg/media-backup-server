@@ -78,7 +78,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 浏览器认证合同只有三条：`POST /api/v2/auth/login`、`GET /api/v2/auth/session`、
 `POST /api/v2/auth/logout`。登录 body 精确为 `{username,password}`；登录和 session 成功体精确为
 `{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不再是客户端登录凭据；它与 `_sarmg_administrators.username` 是不同身份域。
-权限。用户管理等业务位于 `/api/v2/admin/*`，移动端仍只使用 `/v2/*`。管理员 username 规范化、严格
+用户管理等业务位于 `/api/v2/admin/*`，移动端仍只使用 `/v2/*`。管理员 username 规范化、严格
 当前 Argon2id、登录准入、Session/CSRF 生命周期、Cookie 和安全审计均由 Foundation 的
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
 Session 是固定平台策略，不提供产品级 TTL 配置。管理员登录来源使用真实 socket peer，不信任转发来源头。
@@ -135,8 +135,9 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 `application=media-backup`、`application_version=0.3.0`、
 `schema_revision=4`，Schema SHA-256 为
 `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`。移动队列对应
-`media-backup-client` 与 SHA-256
-`fb38736bbf8ac69eb694095e62302f73233e39df42cd2d38e3dd1284e2f02558`。
+`media-backup-client` 0.4.0、schema revision 2 与 SHA-256
+`87eb55ba9366cd06d5a2e0b69b5fd4c7a6eef59c381e9fd4ea340e9e04ef6dfb`。移动数据库身份由 Client
+仓库定义，不属于 Server 启动时验证的数据库。
 
 数据库只在主文件不存在时创建。已存在空文件、非当前元数据或结构漂移会在业务写入前拒绝，不能
 现场手改指纹“修复”。
@@ -165,10 +166,10 @@ Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 的 Media B
 6. 若是版本/Schema 问题，停止服务并先核对 `sarmg-upgrade` 的精确支持矩阵；当前 0.3.0/revision 4
    不受支持，不能调用旧适配器，也不要把兼容代码加入 Server。
 
-移动 Client 的当前已知边界：`retry_wait` 到期会重新准备源文件，不会复用仍持久化的 `prepared_json`；
-若扫描器已按 `remove_source_after_prepare` 删除导出临时源，上传失败后可能持续报源不存在。准备失败或
-`preparing` 崩溃也可能留下 partial part。采集 job ID、数据库行和对应目录证据后再处置；不得删除整个
-`backup-staging-v0.2-r2/prepared/`，也不得把数据库中未经校验的 ID 直接拼为递归删除目标。
+移动 Client 的到期 `retry_wait` 会复用仍持久化的 `prepared_json` 和分块，不重新读取已删除的导出源。
+没有准备结果的任务才重新读取源文件；准备在持久化前失败时可能留下未引用 generation，后续成功准备
+会只回收同一 job 的旧 generation。采集 job ID、数据库行和对应目录证据后再处置；不得删除整个
+`backup-staging-v0.4-r1/`，也不得把数据库中未经校验的 ID 直接拼为递归删除目标。
 
 ## 10. 安全事件
 
@@ -206,7 +207,6 @@ Request ID。
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
 当前 Server Rust 固定 Foundation `=0.8.2` / `e349d8a3b63b6d9f2c41d1515a4909ce8e9821a5`；八个 Web 包使用
-同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。独立 CI 已通过，含 Server archive、
-Android 编译及未签名 iOS 验证，见[消费者证据](https://github.com/isarmg/sarmg-foundation-server/blob/main/consumers/axum-0.7.0-evidence.md)。
-这不代表这些主分支改动已重新发布为移动端或 Server 制品，也不代替原生签名和目标运行验收。
+同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
+归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。
