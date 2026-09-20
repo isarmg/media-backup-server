@@ -19,14 +19,14 @@ assert.match(nodeVersion, /^26\.7\.0\n?$/);
 assertSarmgWebToolchain(manifest, nodeVersion);
 for (const name of foundationPackages) {
   const dependency = `@sarmg/${name}`;
-  const expected = `https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.3/sarmg-${name}-0.8.3.tgz`;
+  const expected = `https://github.com/isarmg/sarmg-foundation-server/releases/download/v0.8.5/sarmg-${name}-0.8.5.tgz`;
   assert.equal(manifest.dependencies?.[dependency], expected);
   assert.equal(lock.packages?.[""]?.dependencies?.[dependency], expected);
 
   const locked = lock.packages?.[`node_modules/${dependency}`];
   assert.equal(locked?.link, undefined);
   assert.equal(locked?.resolved, expected);
-  assert.equal(locked?.version, "0.8.3");
+  assert.equal(locked?.version, "0.8.5");
   assert.match(locked?.integrity ?? "", /^sha512-[A-Za-z0-9+/]+={0,2}$/);
 }
 const adminStyles = readFileSync(new URL("../node_modules/@sarmg/admin-ui/dist/styles.css", import.meta.url), "utf8");

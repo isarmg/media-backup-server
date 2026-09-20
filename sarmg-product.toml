@@ -3,8 +3,8 @@ product_id = "media-backup"
 
 [foundation]
 platform_generation = 1
-version = "0.8.3"
-git_rev = "937f543e38ae34c7520672e465c4f9d3f8010e81"
+version = "0.8.5"
+git_rev = "0d5c100332f8e57229ead2f70eeccc19bfb44ed7"
 
 [[components]]
 id = "server"

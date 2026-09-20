@@ -5,6 +5,22 @@ import AxeBuilder from "@axe-core/playwright";
 import { preview } from "vite";
 
 const session = { authenticated: true, user_id: "A".repeat(43), username: "admin", role: "admin", csrf_token: "A".repeat(43) };
+async function assertColumnContentAlignment(table) {
+  const offsets = await table.evaluate(element => {
+    const textStart = cell => {
+      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT); let text;
+      while ((text = walker.nextNode()) && !text.textContent.trim()) {}
+      if (!text) throw new Error("table cell has no visible text");
+      const range = document.createRange(); range.selectNodeContents(text);
+      return range.getBoundingClientRect().left;
+    };
+    const contentStart = cell => cell.firstElementChild?.getBoundingClientRect().left ?? textStart(cell);
+    const headings = [...element.querySelectorAll("thead th")], values = [...element.querySelector("tbody tr").children];
+    if (headings.length !== values.length) throw new Error("table column count mismatch");
+    return headings.map((heading, index) => Math.abs(textStart(heading) - contentStart(values[index])));
+  });
+  assert.ok(offsets.every(offset => offset < 0.5), `column content offsets: ${JSON.stringify(offsets)}`);
+}
 const time = "2026-09-04T00:00:00Z", userId = "018f1f4b-7a5d-7b5f-8d31-123456789abc";
 const instanceId = "018f1f4b-7a5d-7b5f-8d31-123456789abd", code = "m".repeat(43);
 function instance(overrides = {}) {
@@ -85,6 +101,7 @@ try {
       await expect(instanceTable.getByRole("link", { name: "验收备份账户" })).toBeVisible();
       await expect(instanceTable.getByRole("columnheader")).toHaveText(["实例", "备份状态", "配对状态", "在线状态", "客户端 / 平台", "最后在线", "已用容量 / 配额", "删除"]);
       assert.ok((await instanceTable.locator("th, td").evaluateAll(elements => elements.map(element => getComputedStyle(element).textAlign))).every(value => value === "left"));
+      await assertColumnContentAlignment(instanceTable);
       assert.ok((await instanceTable.locator(".sarmg-actions").evaluateAll(elements => elements.map(element => getComputedStyle(element).justifyContent))).every(value => value === "flex-start"));
       await expect(page.getByRole("complementary")).toHaveCount(0);
       assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
