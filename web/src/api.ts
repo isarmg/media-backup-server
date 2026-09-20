@@ -34,7 +34,6 @@ export type AdminLog = { sequence: number; action: string; entity_id: string; oc
 export type Overview = {
   users: BackupUser[];
   total_users: number;
-  active_users: number;
   unlimited_users: number;
   used_bytes: number;
   pending_bytes: number;
@@ -72,7 +71,6 @@ export const isOverview: JsonGuard<Overview> = (value): value is Overview =>
   value.users.every(isBackupUser) &&
   [
     "total_users",
-    "active_users",
     "unlimited_users",
     "used_bytes",
     "pending_bytes",

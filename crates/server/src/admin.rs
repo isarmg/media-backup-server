@@ -65,7 +65,6 @@ pub(crate) struct AdminInstance {
 pub(crate) struct Overview {
     users: Vec<AdminUser>,
     total_users: i64,
-    active_users: i64,
     unlimited_users: i64,
     used_bytes: i64,
     pending_bytes: i64,
@@ -105,7 +104,6 @@ pub(crate) async fn require_admin(
 pub(crate) async fn overview(State(state): State<AppState>) -> Result<Json<Overview>, AppError> {
     let users = load_users(&state).await?;
     let total_users = users.len() as i64;
-    let active_users = users.iter().filter(|user| user.enabled).count() as i64;
     let unlimited_users = users.iter().filter(|user| user.quota_bytes == 0).count() as i64;
     let used_bytes = users.iter().map(|user| user.used_bytes).sum();
     let pending_bytes = users.iter().map(|user| user.pending_bytes).sum();
@@ -117,7 +115,6 @@ pub(crate) async fn overview(State(state): State<AppState>) -> Result<Json<Overv
     Ok(Json(Overview {
         users,
         total_users,
-        active_users,
         unlimited_users,
         used_bytes,
         pending_bytes,

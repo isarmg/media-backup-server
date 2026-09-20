@@ -54,30 +54,41 @@ function Application() {
     <h1 className="sarmg-visually-hidden">{view === "instances" ? t("备份实例列表", "Backup instance list") : view === "details" ? t("备份详细信息", "Backup details") : t("备份日志", "Backup logs")}</h1>
     {failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
       : overview === null ? <LoadingState>{t("正在载入备份数据…", "Loading backup data…")}</LoadingState>
-      : view === "instances" ? <OverviewView overview={overview} /> : view === "logs" ? <LogsView /> : <><a href="#instances">{t("返回实例列表", "Back to instance list")}</a>{user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("请选择一个备份实例。", "Select a backup instance.")}</EmptyState>}</>}
+      : view === "instances" ? <OverviewView overview={overview} reload={reload} /> : view === "logs" ? <LogsView /> : <><a href="#instances">{t("返回实例列表", "Back to instance list")}</a>{user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("请选择一个备份实例。", "Select a backup instance.")}</EmptyState>}</>}
     {creating && <CreateBackupInstanceDialog close={() => setCreating(false)} reload={reload} />}
   </div>;
 }
 
-function OverviewView({ overview }: { overview: Overview }) {
+function OverviewView({ overview, reload }: { overview: Overview; reload(): void }) {
+  const { notify } = useAdminApplication();
+  const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFailure, setDeleteFailure] = useState<Failure | null>(null);
+  async function remove(instance: BackupInstance) {
+    if (deleting) return;
+    setDeleting(true); setDeleteFailure(null);
+    try {
+      await request(`/api/v2/admin/instances/${instance.id}`, isUndefined, { method: "DELETE" });
+      setDeleteCandidate(null); setDeleteFailure(null); reload();
+      notify(instance.status === "cancelled" || instance.status === "revoked" ? t("实例已删除", "Instance deleted") : t("实例已取消或撤销，可再次删除其信息", "Instance cancelled or revoked; delete it again to remove its entry"));
+    } catch (error) { setDeleteFailure({ requestId: errorRequestId(error) }); }
+    finally { setDeleting(false); }
+  }
   const online = overview.users.filter(user => user.instances[0]?.online === true).length;
-  const pending = overview.users.filter(user => user.instances[0]?.status === "pending").length;
   return <div className="media-sections"><Section title={t("统计", "Statistics")}><Table aria-label={t("实例统计", "Instance statistics")}>
-    <thead><tr><th scope="col">{t("统计项", "Metric")}</th><th scope="col">{t("当前值", "Current value")}</th></tr></thead>
+    <thead><tr><th scope="col">{t("统计项", "Metric")}</th><th scope="col">{t("总数 / 在线", "Total / online")}</th></tr></thead>
     <tbody>
-      <tr><th scope="row">{t("实例总数", "Total instances")}</th><td>{overview.total_users}</td></tr>
-      <tr><th scope="row">{t("在线实例", "Online instances")}</th><td>{online}</td></tr>
-      <tr><th scope="row">{t("待配对实例", "Instances awaiting pairing")}</th><td>{pending}</td></tr>
-      <tr><th scope="row">{t("启用 / 全部实例", "Active / total instances")}</th><td>{overview.active_users} / {overview.total_users}</td></tr>
+      <tr><th scope="row">{t("总数", "Total")}</th><td>{overview.total_users} / {online}</td></tr>
       <tr><th scope="row">{t("媒体已用", "Media storage used")}</th><td>{bytes(overview.used_bytes)}</td></tr>
       <tr><th scope="row">{t("上传预留空间", "Reserved upload space")}</th><td>{bytes(overview.pending_bytes)}</td></tr>
       <tr><th scope="row">{t("已分配配额", "Allocated quota")}</th><td>{bytes(overview.quota_bytes)}{overview.unlimited_users > 0 ? t(" + 不限", " + Unlimited") : ""}</td></tr>
     </tbody></Table>
   </Section><Section title={t("实例列表", "Instance list")}>
+    {deleteFailure && <ErrorState requestId={deleteFailure.requestId}>{t("删除未能确认，请刷新实例列表核对。", "Deletion could not be confirmed. Refresh and check the instance list.")}</ErrorState>}
     {overview.users.length === 0 ? <EmptyState>{t("暂无备份实例", "No backup instances")}</EmptyState> : <Table aria-label={t("实例列表", "Instance list")}>
-      <thead><tr><th>{t("实例", "Instance")}</th><th>{t("备份状态", "Backup status")}</th><th>{t("配对状态", "Pairing status")}</th><th>{t("在线状态", "Online status")}</th><th>{t("客户端 / 平台", "Client / platform")}</th><th>{t("最后在线", "Last seen")}</th><th>{t("已用容量 / 配额", "Used / quota")}</th></tr></thead>
+      <thead><tr><th>{t("实例", "Instance")}</th><th>{t("备份状态", "Backup status")}</th><th>{t("配对状态", "Pairing status")}</th><th>{t("在线状态", "Online status")}</th><th>{t("客户端 / 平台", "Client / platform")}</th><th>{t("最后在线", "Last seen")}</th><th>{t("已用容量 / 配额", "Used / quota")}</th><th>{t("删除", "Delete")}</th></tr></thead>
       <tbody>{overview.users.map(user => { const client = user.instances[0]; return <tr key={user.id}>
-        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{user.display_name}</a></th><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td><td><StatusBadge status={client?.status ?? t("旧数据待补全", "Legacy entry incomplete")} /></td><td><StatusBadge status={client?.online ? t("在线", "Online") : t("离线", "Offline")} /></td><td>{client ? `${client.name} / ${client.platform}` : "—"}</td><td>{client?.last_seen_at || t("尚未配对", "Not paired yet")}</td><td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}</td>
+        <th scope="row"><a href={"#details/" + encodeURIComponent(user.id)}>{user.display_name}</a></th><td><StatusBadge status={user.enabled ? t("已启用", "Enabled") : t("已停用", "Disabled")} /></td><td><StatusBadge status={client?.status ?? t("旧数据待补全", "Legacy entry incomplete")} /></td><td><StatusBadge status={client?.online ? t("在线", "Online") : t("离线", "Offline")} /></td><td>{client ? `${client.name} / ${client.platform}` : "—"}</td><td>{client?.last_seen_at || t("尚未配对", "Not paired yet")}</td><td>{bytes(user.used_bytes)} / {user.quota_bytes === 0 ? t("不限", "Unlimited") : bytes(user.quota_bytes)}</td><td>{client ? <div className="sarmg-actions">{deleteCandidate === client.id ? <><Button disabled={deleting} onClick={() => setDeleteCandidate(null)}>{t("取消", "Cancel")}</Button><Button className="sarmg-danger" disabled={deleting} onClick={() => void remove(client)}>{deleting ? t("正在删除…", "Deleting…") : t("确认删除", "Confirm delete")}</Button></> : <Button disabled={deleting} onClick={() => { setDeleteFailure(null); setDeleteCandidate(client.id); }}>{t("删除", "Delete")}</Button>}</div> : "—"}</td>
       </tr>; })}</tbody>
     </Table>}
   </Section></div>;
@@ -138,27 +149,25 @@ function CreateBackupInstanceDialog({ close, reload }: { close(): void; reload()
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [created, setCreated] = useState<BackupInstance | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy.current) return;
     const data = new FormData(event.currentTarget);
     busy.current = true; setPending(true); setFailure(null);
     try {
-      const instance = await request("/api/v2/admin/instances", isBackupInstance, { method: "POST", body: JSON.stringify({
+      await request("/api/v2/admin/instances", isBackupInstance, { method: "POST", body: JSON.stringify({
         name: String(data.get("name") ?? "").trim(),
       }) });
-      setCreated(instance); reload(); notify(t("备份实例已创建", "Backup instance created"));
+      reload(); close(); notify(t("备份实例已创建，可在详细信息中查看授权码", "Backup instance created. Its authorization code is available in details"));
     } catch (error) { setFailure({ requestId: errorRequestId(error) }); }
     finally { busy.current = false; setPending(false); }
   }
   return <Dialog title={t("新建备份实例", "Create backup instance")} description={t("填写名称后会直接生成实例和长期授权码；存储路径自动分配，配额可在详情中调整。", "Enter a name to create the instance and its long-lived authorization code. Storage is allocated automatically, and quota can be changed in details.")} onClose={() => { if (!busy.current) close(); }}>
-    {created ? <section className="sarmg-content-stack"><p role="status">{t("实例已创建：", "Instance created: ")}{created.name}</p><p>{t("将此长期授权码填入 Media Backup 客户端。服务端会加密保存，之后仍可查看和更换。", "Enter this long-lived authorization code in the Media Backup client. The server stores it encrypted and keeps it viewable and replaceable.")}</p><FormField label={t("授权码", "Authorization code")}><TextField readOnly value={created.authorization_code} autoComplete="off" onFocus={event => event.currentTarget.select()} /></FormField><Button onClick={close}>{t("已保存，关闭", "Saved; close")}</Button></section>
-    : <form aria-label={t("创建备份实例", "Create backup instance")} aria-busy={pending} onSubmit={event => void submit(event)}>
+    <form aria-label={t("创建备份实例", "Create backup instance")} aria-busy={pending} onSubmit={event => void submit(event)}>
       {failure && <ErrorState requestId={failure.requestId}>{t("实例未能创建，请检查名称后重试。", "The instance could not be created. Check its name, then retry.")}</ErrorState>}
       <FormField label={t("实例名称", "Instance name")}><InstanceNameField name="name" required readOnly={pending} data-sarmg-initial-focus /></FormField>
       <div className="sarmg-actions"><Button disabled={pending} onClick={close}>{t("取消", "Cancel")}</Button><Button type="submit" disabled={pending}>{pending ? t("正在创建…", "Creating…") : t("创建实例", "Create instance")}</Button></div>
-    </form>}
+    </form>
   </Dialog>;
 }
 

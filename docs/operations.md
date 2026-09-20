@@ -206,7 +206,7 @@ Request ID。
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 Foundation `=0.8.2` / `e349d8a3b63b6d9f2c41d1515a4909ce8e9821a5`；八个 Web 包使用
+当前 Server Rust 固定 Foundation `=0.8.3` / `937f543e38ae34c7520672e465c4f9d3f8010e81`；八个 Web 包使用
 同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
 归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。

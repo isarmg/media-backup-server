@@ -50,7 +50,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-P-006 | Server 配置位于 `config/`、部署资产位于 `deploy/`；移动客户端只存在于独立 Client 仓库 | 仓库目录 | 开发运维 | 低 | 跨仓库路径和构建命令易被混用 | README、CI 和脚本只引用实际存在的目录 |
 | MED-P-007 | React/Vite 管理客户端位于 `web/`；Android/iOS 原生客户端并列 | 目录结构、workspace scripts | 开发运维 | 低 | 客户端代码位置不一致，维护人员难以识别边界 | README、CI、构建脚本使用统一路径 |
 | MED-P-008 | 原始媒体在 Server 使用 `plain-v1` 明文字节，传输机密性依赖 HTTPS | `StorageEncoding::PlainV1`、Client `crates/crypto` | 核心 | 高 | 改成端到端密文会重写缩略图、恢复、去重和密钥生命周期 | byte-for-byte round trip；HTTP 明文直连不得公网暴露 |
-| MED-P-009 | Server Rust 和八个 Web 包固定 Foundation 0.8.2 的完整 Git revision、Release URL 与 lock integrity，无相邻工作区来源 | Cargo、八个 `@sarmg/*` 依赖、manifest/lock | 保障 | 高 | 平台行为随未固定依赖漂移 | locked 独立构建、Foundation revision test 与 Web 门禁 |
+| MED-P-009 | Server Rust 和八个 Web 包固定 Foundation 0.8.3 的完整 Git revision、Release URL 与 lock integrity，无相邻工作区来源 | Cargo、八个 `@sarmg/*` 依赖、manifest/lock | 保障 | 高 | 平台行为随未固定依赖漂移 | locked 独立构建、Foundation revision test 与 Web 门禁 |
 
 ## 3. 身份、认证与请求边界
 
@@ -188,7 +188,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 |---|---|---|---|---|---|---|
 | MED-W-001 | Foundation Shell 统一 restore/login/logout、导航、通知与诊断，Session/CSRF 只在内存；产品没有第二套登录状态机 | `createSarmgAdminApplication`、`@sarmg/admin-shell` | 保障 | 高 | 认证竞态或 Secret 持久化 | 共享 Shell 测试、消费者 Chromium/Firefox 验收 |
 | MED-W-002 | 统一实例列表、详细信息和日志视图；管理员账号仅由 Foundation Shell 右上角人物图标设置；业务读取失败清除旧数据，安全错误显示 Request ID 和显式重试 | `Application`、`OverviewView`、`UsersView`、`LogsView` | 建议保留 | 中 | 身份域混淆或失败后仍显示过期状态 | 切页、失败/重试、账号设置、无内部错误泄漏 |
-| MED-W-003 | 总览聚合 active/total instance、used/pending/quota 和每实例资源数 | `/api/v2/admin/overview`、Overview guard | 建议保留 | 中 | 容量和实例状态只能手工查询 | unlimited quota、large safe integer、空库 |
+| MED-W-003 | 总览聚合 total instance、used/pending/quota 和每实例资源数；在线数由实例列表统一计算 | `/api/v2/admin/overview`、Overview guard | 建议保留 | 中 | 容量和实例状态只能手工查询 | unlimited quota、large safe integer、空库 |
 | MED-W-004 | 新建表单与 Host/Sunshine 一致只填写实例名称，原子创建自动存储、默认配额和客户端授权码，不显示内部账号；停用需确认，授权码可查看、轮换、取消并在终态删除整个空实例；GiB 配额在详情页编辑并保留原始整数字节 | `CreateBackupInstanceDialog`、`BackupUserForm`、`InstanceManager` | 核心 | 高 | 首次配对重新暴露基础设施参数、部分成功留下孤立归属或授权未真正撤销 | name-only create、默认值、edit/disable、实例配对/轮换/删除、精确 quota |
 | MED-W-005 | 业务 JSON 在进入组件前校验必需字段与类型，路径只允许 `/api/v2/admin/*` | `web/src/api.ts` | 保障 | 中 | 漂移响应会进入组件，或产品 client 被用于移动路由 | 缺失/错误类型、错误 prefix；当前 guard 容忍响应额外字段 |
 | MED-W-006 | Foundation 统一 system/light/dark 主题；产品不读写浏览器存储 | Shell 主题选择器 | 可选 | 低 | 私有外观与平台漂移 | 移动明暗主题 WCAG AA、无横向溢出 |

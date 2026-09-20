@@ -35,7 +35,7 @@ try {
           mutations.push({ path, method });
         }
         if (path === "/api/v2/admin/overview") return route.fulfill({ json: {
-          users, total_users: users.length, active_users: users.filter(user => user.enabled).length,
+          users, total_users: users.length,
           unlimited_users: users.filter(user => user.quota_bytes === 0).length,
           used_bytes: 1024, pending_bytes: 512, quota_bytes: users.reduce((sum, user) => sum + user.quota_bytes, 0),
         } });
@@ -76,8 +76,16 @@ try {
 
       await page.goto(`http://127.0.0.1:${address.port}/admin/`);
       await expect(page.getByRole("button", { name: "实例列表", exact: true })).toHaveAttribute("aria-pressed", "true");
-      await expect(page.getByRole("table", { name: "实例统计" })).toBeVisible();
-      await expect(page.getByRole("table", { name: "实例列表" }).getByRole("link", { name: "验收备份账户" })).toBeVisible();
+      const statistics = page.getByRole("table", { name: "实例统计" });
+      await expect(statistics.getByRole("columnheader")).toHaveText(["统计项", "总数 / 在线"]);
+      await expect(statistics).not.toContainText("待配对实例");
+      await expect(statistics).not.toContainText("启用 / 全部实例");
+      await expect(statistics.getByRole("row").nth(1).locator("th, td")).toHaveText(["总数", "1 / 0"]);
+      const instanceTable = page.getByRole("table", { name: "实例列表" });
+      await expect(instanceTable.getByRole("link", { name: "验收备份账户" })).toBeVisible();
+      await expect(instanceTable.getByRole("columnheader")).toHaveText(["实例", "备份状态", "配对状态", "在线状态", "客户端 / 平台", "最后在线", "已用容量 / 配额", "删除"]);
+      assert.ok((await instanceTable.locator("th, td").evaluateAll(elements => elements.map(element => getComputedStyle(element).textAlign))).every(value => value === "left"));
+      assert.ok((await instanceTable.locator(".sarmg-actions").evaluateAll(elements => elements.map(element => getComputedStyle(element).justifyContent))).every(value => value === "flex-start"));
       await expect(page.getByRole("complementary")).toHaveCount(0);
       assert.deepEqual((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations, []);
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
@@ -93,10 +101,14 @@ try {
       await expect(create.getByRole("alert")).toContainText("create-failure-123");
       await expect(page.locator("body")).not.toContainText("SECRET");
       await create.getByRole("button", { name: "创建实例", exact: true }).click();
-      await expect(create).toHaveCount(0);
-      await expect(page.getByRole("textbox", { name: "授权码", exact: true })).toHaveValue("n".repeat(43));
-      await page.getByRole("button", { name: "已保存，关闭", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "新建备份实例", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "关闭通知", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "关闭通知", exact: true })).toHaveCount(0, { timeout: 7_000 });
       await expect(page.getByRole("link", { name: "新建备份实例", exact: true })).toBeVisible();
+      const createdRow = instanceTable.locator("tbody tr").filter({ has: page.getByRole("link", { name: "新建备份实例", exact: true }) });
+      await createdRow.getByRole("button", { name: "删除", exact: true }).click();
+      await createdRow.getByRole("button", { name: "取消", exact: true }).click();
+      await expect(createdRow.getByRole("button", { name: "确认删除", exact: true })).toHaveCount(0);
 
       await page.getByRole("link", { name: "验收备份账户", exact: true }).click();
       await expect(page.getByRole("button", { name: "详细信息", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -111,14 +123,15 @@ try {
       await page.getByRole("button", { name: "取消配对", exact: true }).click();
       await page.getByRole("button", { name: "确认", exact: true }).click();
       await expect(page.getByText("cancelled", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "删除实例", exact: true }).click();
-      await page.getByRole("button", { name: "确认", exact: true }).click();
-      const deleteDialog = page.getByRole("dialog", { name: "删除实例", exact: true });
-      await expect(deleteDialog).toBeVisible();
-      await expect(deleteDialog.getByRole("alert")).toContainText("delete-failure-123");
+      failDelete = true;
+      await page.getByRole("button", { name: "实例列表", exact: true }).click();
+      const originalRow = instanceTable.locator("tbody tr").filter({ has: page.getByRole("link", { name: "验收备份账户", exact: true }) });
+      await originalRow.getByRole("button", { name: "删除", exact: true }).click();
+      await originalRow.getByRole("button", { name: "确认删除", exact: true }).click();
+      await expect(page.getByRole("alert")).toContainText("delete-failure-123");
       await expect(page.locator("body")).not.toContainText("SECRET backup path");
-      await deleteDialog.getByRole("button", { name: "确认", exact: true }).click();
-      await expect(page.getByText("请选择一个备份实例。", { exact: true })).toBeVisible();
+      await originalRow.getByRole("button", { name: "确认删除", exact: true }).click();
+      await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toHaveCount(0);
 
       await page.getByRole("button", { name: "日志", exact: true }).click();
       await expect(page.getByText("backup.instance.create", { exact: true })).toBeVisible();
