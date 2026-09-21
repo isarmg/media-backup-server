@@ -2,9 +2,9 @@
 set -euo pipefail
 
 readonly product="media-backup-server"
-readonly version="0.3.17"
+readonly version="0.3.18"
 readonly target="x86_64-unknown-linux-gnu"
-readonly release_contract_sha256="ec6fe1ae4e5e96c5380114b9c675c25d1956d7985b9b205edd3d42edcdd61be5"
+readonly release_contract_sha256="8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724"
 readonly service_user="isarmg-media"
 readonly service_group="isarmg-media"
 readonly app_dir="/opt/isarmg/media-backup"
@@ -156,14 +156,14 @@ expected_identity_keys = {
 }
 expected_identity = {
     "product": "media-backup-server",
-    "version": "0.3.17",
+    "version": "0.3.18",
     "target": "x86_64-unknown-linux-gnu",
     "api_version": "v2",
     "storage_encoding": "plain-v1",
     "server_schema_revision": 5,
     "server_schema_sha256": "a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e",
-    "web_assets_sha256": "9b4178b7489ce48b5ece271d25eb098b36045cd6851fbffef14cb3dea052e065",
-    "release_contract_sha256": "ec6fe1ae4e5e96c5380114b9c675c25d1956d7985b9b205edd3d42edcdd61be5",
+    "web_assets_sha256": "99dbf6f9afa4315ad8b23d3bb9db6b5bf3b84ab78280bea9cdd160853664488b",
+    "release_contract_sha256": "8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724",
 }
 expected_directories = {
     "bin", "config", "docs", "scripts", "share", "share/web",
@@ -461,7 +461,7 @@ preflight_config_path="$(rooted "$config_file")"
 preflight_unit_path="$(rooted "$unit_file")"
 validate_empty_release_destination
 if [[ -e "$preflight_release_path" || -L "$preflight_release_path" ]]; then
-  die "release 0.3.17 destination already exists; installation is one-shot and no-clobber"
+  die "release 0.3.18 destination already exists; installation is one-shot and no-clobber"
 fi
 if [[ -e "$preflight_config_path" || -L "$preflight_config_path" ]]; then
   ensure_single_link_regular_file "$preflight_config_path" "configuration"
@@ -494,7 +494,7 @@ if [[ "$test_mode" == "0" ]]; then
 fi
 
 [[ ! -e "$release_path" && ! -L "$release_path" ]] ||
-  die "release 0.3.17 destination appeared during installation"
+  die "release 0.3.18 destination appeared during installation"
 if [[ -e "$config_path" || -L "$config_path" ]]; then
   ensure_single_link_regular_file "$config_path" "configuration"
 fi

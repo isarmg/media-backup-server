@@ -2,9 +2,9 @@
 set -euo pipefail
 
 readonly archive_arg="${1:-${MEDIA_BACKUP_RELEASE_ARCHIVE:-}}"
-readonly package="media-backup-server-0.3.17-x86_64-unknown-linux-gnu"
-readonly version="0.3.17"
-readonly contract="ec6fe1ae4e5e96c5380114b9c675c25d1956d7985b9b205edd3d42edcdd61be5"
+readonly package="media-backup-server-0.3.18-x86_64-unknown-linux-gnu"
+readonly version="0.3.18"
+readonly contract="8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724"
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly project_dir
 
@@ -29,7 +29,7 @@ cleanup() {
 trap cleanup EXIT
 
 [[ -n "$archive_arg" ]] ||
-  fail "usage: test-deployment.sh /absolute/path/media-backup-server-0.3.17-x86_64-unknown-linux-gnu.tar.gz"
+  fail "usage: test-deployment.sh /absolute/path/media-backup-server-0.3.18-x86_64-unknown-linux-gnu.tar.gz"
 [[ "$archive_arg" = /* && -f "$archive_arg" && ! -L "$archive_arg" ]] ||
   fail "release archive must be an absolute regular non-symlink file"
 [[ "$(stat -c '%h' -- "$archive_arg")" == "1" ]] || fail "release archive has a hard-link alias"
@@ -74,15 +74,15 @@ expected_keys = {
 }
 assert isinstance(identity, dict) and set(identity) == expected_keys
 assert identity["product"] == "media-backup-server"
-assert identity["version"] == "0.3.17"
+assert identity["version"] == "0.3.18"
 assert re.fullmatch(r"[0-9a-f]{40}", identity["source_revision"])
 assert identity["target"] == "x86_64-unknown-linux-gnu"
 assert identity["api_version"] == "v2"
 assert identity["storage_encoding"] == "plain-v1"
 assert identity["server_schema_revision"] == 5
 assert identity["server_schema_sha256"] == "a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e"
-assert identity["web_assets_sha256"] == "9b4178b7489ce48b5ece271d25eb098b36045cd6851fbffef14cb3dea052e065"
-assert identity["release_contract_sha256"] == "ec6fe1ae4e5e96c5380114b9c675c25d1956d7985b9b205edd3d42edcdd61be5"
+assert identity["web_assets_sha256"] == "99dbf6f9afa4315ad8b23d3bb9db6b5bf3b84ab78280bea9cdd160853664488b"
+assert identity["release_contract_sha256"] == "8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724"
 PY
 source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
 verification="$($real_binary release-verify "$release_root")"
@@ -511,7 +511,7 @@ for setting in \
   'StateDirectory=isarmg/media-backup' \
   'RuntimeDirectory=isarmg/media-backup' \
   'EnvironmentFile=/etc/isarmg/media-backup.env' \
-  'ExecStart=/opt/isarmg/media-backup/releases/0.3.17/bin/media-backup-server serve-release /opt/isarmg/media-backup/releases/0.3.17' \
+  'ExecStart=/opt/isarmg/media-backup/releases/0.3.18/bin/media-backup-server serve-release /opt/isarmg/media-backup/releases/0.3.18' \
   'ReadWritePaths=/var/lib/isarmg/media-backup /run/isarmg/media-backup' \
   'ProtectSystem=strict' \
   'ProtectHome=true' \

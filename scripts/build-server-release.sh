@@ -6,10 +6,10 @@ readonly project_dir
 readonly binary="${1:-}"
 readonly source_revision="${2:-}"
 readonly output_arg="${3:-}"
-readonly version="0.3.17"
+readonly version="0.3.18"
 readonly target="x86_64-unknown-linux-gnu"
 readonly package="media-backup-server-$version-$target"
-readonly release_contract_sha256="ec6fe1ae4e5e96c5380114b9c675c25d1956d7985b9b205edd3d42edcdd61be5"
+readonly release_contract_sha256="8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724"
 
 staging_root=""
 archive_staging=""
