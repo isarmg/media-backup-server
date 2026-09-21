@@ -251,8 +251,8 @@ async fn bootstrap(
         URL_SAFE_NO_PAD.encode(&authorization_hash[..8])
     ))?;
     let instance: Option<(Uuid, Uuid)> = sqlx::query_as(
-        "SELECT d.id,d.account_id FROM devices d JOIN accounts a ON a.id=d.account_id \
-         WHERE d.authorization_code_hash=? AND d.pairing_status='pending' AND d.token_hash IS NULL AND a.enabled=TRUE",
+        "SELECT id,account_id FROM devices \
+         WHERE authorization_code_hash=? AND pairing_status='pending' AND token_hash IS NULL",
     )
     .bind(&authorization_hash)
     .fetch_optional(&state.pool)
@@ -296,14 +296,10 @@ async fn bootstrap(
 }
 
 fn valid_pairing_authorization_code(value: &str) -> bool {
-    (value.len() == 32
+    value.len() == 36
         && value
             .bytes()
-            .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase()))
-        || (value.len() == 43
-            && value
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_')))
+            .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase())
 }
 
 async fn create_upload(
@@ -741,14 +737,11 @@ async fn account_policy_for_update(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     account_id: Uuid,
 ) -> Result<AccountPolicy, AppError> {
-    let row = sqlx::query("SELECT storage_path, quota_bytes, enabled FROM accounts WHERE id = ?")
+    let row = sqlx::query("SELECT storage_path, quota_bytes FROM accounts WHERE id = ?")
         .bind(account_id)
         .fetch_optional(&mut **transaction)
         .await?
         .ok_or_else(AppError::unauthorized)?;
-    if !row.get::<bool, _>("enabled") {
-        return Err(AppError::new(StatusCode::FORBIDDEN, "account is disabled"));
-    }
     Ok(AccountPolicy {
         storage_path: row.get("storage_path"),
         quota_bytes: row.get("quota_bytes"),

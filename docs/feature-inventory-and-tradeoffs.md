@@ -45,7 +45,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-P-001 | Android/iOS 把授权范围内的照片、视频和设备生成缩略图备份到自托管 Server | Client 仓库、`crates/server` | 核心 | 高 | 项目不再是完整移动媒体备份系统 | 两平台至少一条原始媒体+缩略图端到端 |
 | MED-P-002 | Server 唯一支持 `x86_64-unknown-linux-gnu`，正式主机唯一为 Linux AMD64 | `sarmg-server-target`、server `build.rs`、release/systemd/scripts | 保障 | 高 | 会产生未经验证的 Server 平台制品 | 非目标编译、错误 ELF、错误 uname、systemd architecture |
 | MED-P-003 | Android/iOS 客户端继续按各自平台架构构建；“Server 仅 AMD64”不限制移动 ABI | Android NDK targets、Apple targets | 核心 | 高 | 若误删移动架构，真机无法加载 Rust core | arm64 Android/iOS；模拟器；ABI/header 一致 |
-| MED-P-004 | Server 软件为 `0.3.16`、数据库合同为 `0.3.0`/revision 4；Client 发行与移动状态另有独立身份 | metadata、Client mobile epoch、release identity | 保障 | 高 | 混用版本维度会误拒绝兼容状态或误收旧状态 | 各边界按自己的 product/version/revision 精确拒绝 |
+| MED-P-004 | Server 软件为 `0.3.16`、数据库合同为 `0.3.0`/revision 5；Client 发行与移动状态另有独立身份 | metadata、Client mobile epoch、release identity | 保障 | 高 | 混用版本维度会误拒绝兼容状态或误收旧状态 | 各边界按自己的 product/version/revision 精确拒绝 |
 | MED-P-005 | 产品不内置迁移、备份或恢复数据库命令；代际任务属于 `sarmg-upgrade` | Server CLI、Client open path | 保障 | 高 | 在线转换会把未知状态带入服务进程 | CLI 清单；Schema mismatch 只读失败 |
 | MED-P-006 | Server 配置位于 `config/`、部署资产位于 `deploy/`；移动客户端只存在于独立 Client 仓库 | 仓库目录 | 开发运维 | 低 | 跨仓库路径和构建命令易被混用 | README、CI 和脚本只引用实际存在的目录 |
 | MED-P-007 | React/Vite 管理客户端位于 `web/`；Android/iOS 原生客户端并列 | 目录结构、workspace scripts | 开发运维 | 低 | 客户端代码位置不一致，维护人员难以识别边界 | README、CI、构建脚本使用统一路径 |
@@ -70,7 +70,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-A-012 | 写管理请求要求单个 CSRF、同源 Origin 与单一 Host/URI authority | Foundation Axum Adapter | 保障 | 高 | 禁止跨站和重复头歧义 | 共享 Axum/Hyper 套件 |
 | MED-A-013 | 生产 Cookie 为 __Host-sarmg-media-backup-session，Secure/HttpOnly/SameSite=Strict/Path=/ | Foundation session_set_cookie | 保障 | 低 | 不提供产品 Cookie 别名 | 精确属性与 loopback 开发模式 |
 | MED-A-015 | 数据面 accounts 与管理面 _sarmg_administrators 完全分离 | 产品移动授权、Foundation 管理授权 | 核心 | 高 | 同名账户不共享凭据或权限 | 移动 /v2 与管理 /api/v2 分域 |
-| MED-A-016 | 管理员通过 `/api/v2/admin/instances` 直接创建默认名称实例；Server 在同一事务中创建自动分配的内部 account 隔离边界、100 GiB 默认配额、device 和 32 位小写英文字母数字长期授权码，不暴露“先建用户再建实例”的流程。授权码保存为经实例 ID 绑定的信封密文和独立摘要；bootstrap 仍只接受待配对授权码并签发随机 Bearer token，轮换立即清除旧 token | `routes::bootstrap`、`admin.rs`、`crypto.rs`、`accounts`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；部分创建会留下孤立归属；明文库泄漏扩大 | strict optional-name DTO、默认值、原子创建、正误授权码、取消/删除、轮换、disabled account、token digest、设备 audit |
+| MED-A-016 | 管理员通过 `/api/v2/admin/instances` 直接创建默认名称实例；Server 在同一事务中创建自动分配的永久启用内部 account 隔离边界、100 GiB 默认配额、device 和 36 位小写英文字母数字长期授权码，不暴露“先建用户再建实例”的流程。授权码保存为经实例 ID 绑定的信封密文和独立摘要；bootstrap 仍只接受待配对授权码并签发随机 Bearer token，轮换立即清除旧 token | `routes::bootstrap`、`admin.rs`、`crypto.rs`、`accounts`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；部分创建会留下孤立归属；明文库泄漏扩大 | strict optional-name DTO、默认值、原子创建、正误授权码、取消/删除、轮换、token digest、设备 audit |
 | MED-A-017 | 移动业务 API 接受 device token 或未撤销 API Key，解析到同一 account/device context | `auth::require_auth` | 核心 | 高 | 无法授权上传，或两个 token 类型产生不同隔离语义 | device/API key、revoked、disabled、跨账户 |
 | MED-A-018 | API Key 原值只在创建响应出现一次，库中存 hash/prefix，可列出和撤销 | `api_access.rs`、`api_keys` | 建议保留 | 高 | 自动化/额外客户端只能保存设备 token；明文保存会泄漏 | 创建、列表不含 token、撤销、last_used |
 | MED-A-019 | `/metrics` 使用与其他身份分离的可选 Bearer `METRICS_TOKEN` | `metrics.rs`、Config | 保障 | 中 | 聚合容量可被公开，或监控被迫保存 Administrator Cookie | 无/错/对 token；空配置语义 |
@@ -98,7 +98,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-U-014 | commit 重新读取每个 part、核对 Hash/size、拼装 stage、核对完整对象并 fsync | `storage::assemble`、`upload_commit` | 保障 | 高 | 仅信 received_at 会把损坏 part 发布为媒体 | part 篡改、缺失、full hash、stage fsync |
 | MED-U-015 | final object 与 stage 位于同一受控文件系统，以 no-replace `linkat` 发布同一 inode、核对 device+inode 后 fsync 目标父目录 | `RootedFs::link_no_replace`、`CommitKeys` | 保障 | 高 | 可覆盖 winner、发布错误实体或在崩溃后丢目录项 | `EEXIST`、identity swap、fsync 故障；不是 rename |
 | MED-U-016 | metadata commit 有 blob 唯一竞争重试，最终 resource upsert 幂等 | `commit_metadata_with_race_retry`、unique index | 保障 | 高 | 并发相同内容会报随机冲突或重复 blob | 双 complete、唯一约束 race、返回 deduplicated |
-| MED-U-017 | commit 前再次核对 account enabled、storage path、quota 和对象身份 | `begin_commit`、`ensure_commit_quota` | 保障 | 高 | 上传期间改账户策略后仍可越权提交 | disable、path change、quota shrink |
+| MED-U-017 | commit 前再次核对 storage path、quota 和对象身份 | `begin_commit`、`ensure_commit_quota` | 保障 | 高 | 上传期间修改存储策略后仍可越权提交 | path change、quota shrink |
 | MED-U-018 | serve 启动时先 reconcile 未完成 commits、遗留 committed stage 与无引用 blob，之后每 120 秒重复且跳过错过 tick；周期任务不重新 Hash 已完成历史 blob。`reconcile scan` 提供持锁手工入口，无法证明的未完成状态标 unknown 而非伪成功 | `upload_commit::reconcile_all`、`main.rs` | 保障 | 高 | 崩溃后的 stage/final/DB 组合或待回收 blob 会永久卡住；反复扫描历史内容会造成随数据量增长的固定负载 | commit_started/finalizing 各物理组合、committed stage 清理、历史资源版本、orphan blob、周期/手工重试；后台任务无独立 graceful join |
 | MED-U-019 | rooted filesystem 拒绝绝对路径、`.`/`..`、symlink、特殊文件和账户根逃逸 | `rooted_fs.rs`、`storage.rs` | 保障 | 高 | 上传或下载可越出 `DATA_DIR` | symlink/rename race、FIFO、嵌套账户路径；当前发布会受控创建 hardlink，数据根须独占写权限 |
 | MED-U-020 | account storage paths 全局唯一且不得互相包含，保留 `uploads` 内部目录 | `admin.rs`、doctor | 保障 | 高 | 两个账户可能读写同一物理树 | equal/parent/child/reserved、并发管理变更 |
@@ -189,7 +189,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-W-001 | Foundation Shell 统一 restore/login/logout、导航、通知与诊断，Session/CSRF 只在内存；产品没有第二套登录状态机 | `createSarmgAdminApplication`、`@sarmg/admin-shell` | 保障 | 高 | 认证竞态或 Secret 持久化 | 共享 Shell 测试、消费者 Chromium/Firefox 验收 |
 | MED-W-002 | 统一完整有序实例列表、详细信息和日志视图；实例列表按账户名排序且不分页；管理员账号仅由 Foundation Shell 右上角人物图标设置；业务读取失败清除旧数据，安全错误显示 Request ID 和显式重试 | `Application`、`OverviewView`、`UsersView`、`LogsView` | 建议保留 | 中 | 身份域混淆或失败后仍显示过期状态 | 切页、顺序、失败/重试、账号设置、无内部错误泄漏 |
 | MED-W-003 | 总览聚合 total instance、used/pending/quota 和每实例资源数；在线数由实例列表统一计算 | `/api/v2/admin/overview`、Overview guard | 建议保留 | 中 | 容量和实例状态只能手工查询 | unlimited quota、large safe integer、空库 |
-| MED-W-004 | 新建按钮直接创建默认名称实例，原子创建自动存储、默认配额和客户端授权码；详情以账户名、只读内部账户和密码展示配对信息；停用需确认，密码可查看、轮换、取消并在终态删除整个空实例；GiB 配额在详情页编辑并保留原始整数字节 | `Application`、`BackupUserForm`、`InstanceManager` | 核心 | 高 | 首次配对重新暴露基础设施参数、部分成功留下孤立归属或授权未真正撤销 | direct default create、默认值、edit/disable、实例配对/轮换/删除、精确 quota |
+| MED-W-004 | 新建按钮直接创建永久启用的默认名称实例，原子创建自动存储、默认配额和客户端授权码；详情以账户名、只读内部账户和密码展示配对信息；密码可查看、轮换、取消并在终态删除整个空实例；GiB 配额在详情页编辑并保留原始整数字节 | `Application`、`BackupUserForm`、`InstanceManager` | 核心 | 高 | 首次配对重新暴露基础设施参数、部分成功留下孤立归属或授权未真正撤销 | direct default create、默认值、实例配对/轮换/删除、精确 quota |
 | MED-W-005 | 业务 JSON 在进入组件前校验必需字段与类型，路径只允许 `/api/v2/admin/*` | `web/src/api.ts` | 保障 | 中 | 漂移响应会进入组件，或产品 client 被用于移动路由 | 缺失/错误类型、错误 prefix；当前 guard 容忍响应额外字段 |
 | MED-W-006 | Foundation 统一 system/light/dark 主题；产品不读写浏览器存储 | Shell 主题选择器 | 可选 | 低 | 私有外观与平台漂移 | 移动明暗主题 WCAG AA、无横向溢出 |
 | MED-W-007 | Foundation tokens/reset/accessibility 提供 focus、reduced motion、forced colors 基线 | CSS imports、`data-sarmg-scope` | 保障 | 中 | 基础行为跨项目漂移 | keyboard、focus、high contrast、CSS digest |
@@ -202,7 +202,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 软件为 0.3.16，数据库 Schema identity 为 media-backup 0.3.0、revision 4、SHA `84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 软件为 0.3.16，数据库 Schema identity 为 media-backup 0.3.0、revision 5、SHA `a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e`；管理员和平台 DDL 由 Foundation 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-002 | Client 当前 Schema revision 为 2，SHA 为 `87eb55ba9366cd06d5a2e0b69b5fd4c7a6eef59c381e9fd4ea340e9e04ef6dfb` | Client `client-core/database.rs` | 保障 | 高 | 手机队列状态不可证明 | Rust/Kotlin/Swift epoch 与 Schema identity |
 | MED-R-003 | 两个数据库都先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | 两个 `database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |

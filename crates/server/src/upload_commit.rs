@@ -308,14 +308,11 @@ async fn begin_commit(state: &AppState, record: CommitRecord) -> Result<CommitRe
     }
 
     let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
-    let row = sqlx::query("SELECT enabled, storage_path, quota_bytes FROM accounts WHERE id = ?")
+    let row = sqlx::query("SELECT storage_path, quota_bytes FROM accounts WHERE id = ?")
         .bind(record.account_id)
         .fetch_optional(&mut *transaction)
         .await?
         .ok_or_else(AppError::unauthorized)?;
-    if !row.get::<bool, _>("enabled") {
-        return Err(AppError::new(StatusCode::FORBIDDEN, "account is disabled"));
-    }
     let account_path: String = row.get("storage_path");
     let quota_bytes: i64 = row.get("quota_bytes");
     let existing = load_blob_candidate_in(

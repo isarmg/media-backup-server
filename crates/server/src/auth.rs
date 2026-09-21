@@ -63,8 +63,7 @@ pub async fn require_auth(
         r#"
         SELECT d.account_id, d.id
         FROM devices d
-        JOIN accounts a ON a.id = d.account_id
-        WHERE d.token_hash = ? AND a.enabled = TRUE
+        WHERE d.token_hash = ?
         "#,
     )
     .bind(token_hash)
@@ -84,8 +83,7 @@ pub async fn require_auth(
                 r#"
             SELECT k.account_id, k.device_id, k.id
             FROM api_keys k
-            JOIN accounts a ON a.id = k.account_id
-            WHERE k.token_hash = ? AND k.revoked_at IS NULL AND a.enabled = TRUE
+            WHERE k.token_hash = ? AND k.revoked_at IS NULL
             "#,
             )
             .bind(Sha256::digest(token.as_bytes()).to_vec())

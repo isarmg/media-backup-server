@@ -12,7 +12,6 @@ export type BackupUser = {
   pending_bytes: number;
   device_count: number;
   resource_count: number;
-  enabled: boolean;
   created_at: string;
   last_seen_at: string;
   instances: BackupInstance[];
@@ -50,7 +49,7 @@ const isNumber = (value: unknown): value is number =>
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 
 export const isBackupInstance: JsonGuard<BackupInstance> = (value): value is BackupInstance =>
-  isRecord(value) && ["id", "name", "platform", "status", "authorization_code", "created_at", "last_seen_at"].every(key => isString(value[key])) && (/^[a-z0-9]{32}$/.test(value.authorization_code as string) || /^[A-Za-z0-9_-]{43}$/.test(value.authorization_code as string)) && isBoolean(value.online);
+  isRecord(value) && ["id", "name", "platform", "status", "authorization_code", "created_at", "last_seen_at"].every(key => isString(value[key])) && /^[a-z0-9]{36}$/.test(value.authorization_code as string) && isBoolean(value.online);
 
 export const isBackupUser: JsonGuard<BackupUser> = (
   value,
@@ -62,7 +61,7 @@ export const isBackupUser: JsonGuard<BackupUser> = (
   ["quota_bytes", "used_bytes", "pending_bytes", "device_count", "resource_count"].every(
     (key) => isNumber(value[key]),
   ) &&
-  isBoolean(value.enabled) && Array.isArray(value.instances) && value.instances.every(isBackupInstance);
+  Array.isArray(value.instances) && value.instances.every(isBackupInstance);
 
 
 export const isOverview: JsonGuard<Overview> = (value): value is Overview =>

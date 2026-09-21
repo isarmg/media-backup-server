@@ -26,7 +26,7 @@ pub async fn prometheus(
     let row = sqlx::query(
         r#"
         SELECT
-          (SELECT COUNT(*) FROM accounts WHERE enabled) AS accounts,
+          (SELECT COUNT(*) FROM accounts) AS accounts,
           (SELECT COUNT(*) FROM devices) AS devices,
           (SELECT COUNT(*) FROM assets WHERE deleted_at IS NULL) AS assets,
           (SELECT COUNT(*) FROM assets WHERE deleted_at IS NOT NULL) AS trashed_assets,
@@ -39,7 +39,7 @@ pub async fn prometheus(
     .await?;
     let body = format!(
         concat!(
-            "# HELP media_backup_accounts Enabled accounts.\n",
+            "# HELP media_backup_accounts Backup accounts.\n",
             "# TYPE media_backup_accounts gauge\nmedia_backup_accounts {}\n",
             "# TYPE media_backup_devices gauge\nmedia_backup_devices {}\n",
             "# TYPE media_backup_assets gauge\nmedia_backup_assets {}\n",

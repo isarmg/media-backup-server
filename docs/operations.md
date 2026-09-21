@@ -133,8 +133,8 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 
 服务端软件版本是 `0.3.16`，但数据库合同独立保持不变：`product_metadata` 必须精确为
 `application=media-backup`、`application_version=0.3.0`、
-`schema_revision=4`，Schema SHA-256 为
-`84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe`。移动队列对应
+`schema_revision=5`，Schema SHA-256 为
+`a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e`。移动队列对应
 `media-backup-client` 0.4.0、schema revision 2 与 SHA-256
 `87eb55ba9366cd06d5a2e0b69b5fd4c7a6eef59c381e9fd4ea340e9e04ef6dfb`。移动数据库身份由 Client
 仓库定义，不属于 Server 启动时验证的数据库。
@@ -145,9 +145,9 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 ## 7. 当前状态备份与恢复
 
 Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 的 Media Backup 支持矩阵只覆盖
-`0.2.0` / revision 1，**不支持**这里的 `0.3.0` / revision 4 数据库与配套 `DATA_DIR`，因此目前没有
+`0.2.0` / revision 1，**不支持**这里的 `0.3.0` / revision 5 数据库与配套 `DATA_DIR`，因此目前没有
 受支持的产品级备份/恢复命令。不得用旧适配器、只复制 SQLite 或手改 identity 来绕过这一缺口；生产上线
-前必须先为 `sarmg-upgrade` 增加并验证精确的 0.3.0/revision 4 状态适配器，使 SQLite 主文件、sidecar
+前必须先为 `sarmg-upgrade` 增加并验证精确的 0.3.0/revision 5 状态适配器，使 SQLite 主文件、sidecar
 与 `DATA_DIR` 作为同一一致性单元处理。适配器可用后仍应执行加密 3-2-1 备份和隔离恢复演练，恢复后先
 运行离线验证与 `doctor` 再开放流量。
 
@@ -163,7 +163,7 @@ Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 的 Media B
 3. 检查代理真实 peer、TLS、`TRUSTED_PROXY_CIDRS` 和客户端时间。
 4. 运行 `doctor`，区分数据库合同、文件系统、Hash 或上传恢复错误。
 5. 移动端检查系统权限、后台任务限制、本地队列和安全凭据存储。
-6. 若是版本/Schema 问题，停止服务并先核对 `sarmg-upgrade` 的精确支持矩阵；当前 0.3.0/revision 4
+6. 若是版本/Schema 问题，停止服务并先核对 `sarmg-upgrade` 的精确支持矩阵；当前 0.3.0/revision 5
    不受支持，不能调用旧适配器，也不要把兼容代码加入 Server。
 
 移动 Client 的到期 `retry_wait` 会复用仍持久化的 `prepared_json` 和分块，不重新读取已删除的导出源。
@@ -199,7 +199,7 @@ HTTP 响应和发行身份校验，发行包 `share/web/` 必须包含相同字�
 管理端只呈现“备份实例”：点击新建后 `POST /api/v2/admin/instances` 使用默认名称，并在同一数据库事务中创建自动分配的
 内部存储归属、100 GiB 默认配额、客户端实例和长期授权码；路径和配额可在详情页调整，不要求管理员先创建业务用户。
 内部 `accounts` 仅作为上传数据的隔离与配额边界，不是登录身份，也不会在产品页面暴露账号或密码。当前管理员只能
-从右上角人物图标进入 Foundation 账户设置。实例停用需显式确认；写请求失败不会自动重放，界面仅显示安全错误和
+从右上角人物图标进入 Foundation 账户设置。实例创建后永久启用；写请求失败不会自动重放，界面仅显示安全错误和
 Request ID。
 
 `npm run test:browser --prefix web` 对实际 dist 运行 Chromium/Firefox 验收，覆盖实例原子创建与配对、

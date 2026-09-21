@@ -4,7 +4,6 @@ CREATE TABLE accounts (
     display_name TEXT NOT NULL DEFAULT '默认用户',
     storage_path TEXT NOT NULL,
     quota_bytes INTEGER NOT NULL DEFAULT 107374182400,
-    enabled INTEGER NOT NULL DEFAULT 1,
     username TEXT NOT NULL
 );
 

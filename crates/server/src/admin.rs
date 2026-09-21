@@ -26,7 +26,6 @@ pub(crate) struct UpdateUserRequest {
     display_name: String,
     storage_path: String,
     quota_bytes: i64,
-    enabled: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -40,7 +39,6 @@ pub(crate) struct AdminUser {
     pending_bytes: i64,
     device_count: i64,
     resource_count: i64,
-    enabled: bool,
     created_at: String,
     last_seen_at: String,
     instances: Vec<AdminInstance>,
@@ -122,18 +120,39 @@ pub(crate) async fn overview(State(state): State<AppState>) -> Result<Json<Overv
 }
 
 pub(crate) async fn logs(State(state): State<AppState>) -> Result<Json<Vec<AdminLog>>, AppError> {
-    let rows = sqlx::query("SELECT sequence,action,COALESCE(entity_id,'') entity_id,strftime('%Y-%m-%dT%H:%M:%SZ',occurred_at) occurred_at FROM audit_events ORDER BY sequence DESC LIMIT 200")
-        .fetch_all(&state.pool).await?;
-    Ok(Json(
-        rows.into_iter()
-            .map(|row| AdminLog {
-                sequence: row.get("sequence"),
-                action: row.get("action"),
-                entity_id: row.get("entity_id"),
-                occurred_at: row.get("occurred_at"),
+    let rows = sqlx::query(
+        r#"
+        SELECT sequence, action,
+               CASE
+                 WHEN entity_id IS NULL THEN ''
+                 WHEN typeof(entity_id) = 'blob' AND length(entity_id) = 16 THEN
+                   lower(substr(hex(entity_id), 1, 8) || '-' ||
+                         substr(hex(entity_id), 9, 4) || '-' ||
+                         substr(hex(entity_id), 13, 4) || '-' ||
+                         substr(hex(entity_id), 17, 4) || '-' ||
+                         substr(hex(entity_id), 21, 12))
+                 ELSE CAST(entity_id AS TEXT)
+               END AS entity_id,
+               strftime('%Y-%m-%dT%H:%M:%SZ', occurred_at) AS occurred_at
+        FROM audit_events
+        ORDER BY sequence DESC
+        LIMIT 200
+        "#,
+    )
+    .fetch_all(&state.pool)
+    .await?;
+    let logs = rows
+        .into_iter()
+        .map(|row| {
+            Ok(AdminLog {
+                sequence: row.try_get("sequence")?,
+                action: row.try_get("action")?,
+                entity_id: row.try_get("entity_id")?,
+                occurred_at: row.try_get("occurred_at")?,
             })
-            .collect(),
-    ))
+        })
+        .collect::<Result<Vec<_>, sqlx::Error>>()?;
+    Ok(Json(logs))
 }
 
 pub(crate) async fn create_instance(
@@ -155,7 +174,7 @@ pub(crate) async fn create_instance(
     let hash = Sha256::digest(code.as_bytes()).to_vec();
     let mut transaction = state.pool.begin_with("BEGIN IMMEDIATE").await?;
     let username = format!("instance-{}", account_id.simple());
-    sqlx::query("INSERT INTO accounts(id,username,display_name,storage_path,quota_bytes,enabled,created_at) VALUES(?,?,?,?,?,1,datetime('now'))")
+    sqlx::query("INSERT INTO accounts(id,username,display_name,storage_path,quota_bytes,created_at) VALUES(?,?,?,?,?,datetime('now'))")
         .bind(account_id).bind(username).bind(name).bind(&storage_path)
         .bind(quota_bytes).execute(&mut *transaction).await?;
     sqlx::query("INSERT INTO devices(id,account_id,name,platform,token_hash,authorization_code_hash,authorization_code_enc,pairing_status,created_at,last_seen_at) VALUES(?,?,?,'unknown',NULL,?,?,'pending',datetime('now'),NULL)")
@@ -179,9 +198,16 @@ pub(crate) async fn update_user(
     ensure_unique_path(&state, storage_path, Some(id)).await?;
     state.storage.validate_account_path(storage_path).await?;
     let mut transaction = state.pool.begin().await?;
-    let changed = sqlx::query("UPDATE accounts SET username=?,display_name=?,storage_path=?,quota_bytes=?,enabled=? WHERE id=?")
-        .bind(username).bind(display_name).bind(storage_path).bind(request.quota_bytes)
-        .bind(request.enabled).bind(id).execute(&mut *transaction).await?;
+    let changed = sqlx::query(
+        "UPDATE accounts SET username=?,display_name=?,storage_path=?,quota_bytes=? WHERE id=?",
+    )
+    .bind(username)
+    .bind(display_name)
+    .bind(storage_path)
+    .bind(request.quota_bytes)
+    .bind(id)
+    .execute(&mut *transaction)
+    .await?;
     if changed.rows_affected() == 0 {
         return Err(AppError::not_found("user not found"));
     }
@@ -285,14 +311,14 @@ async fn write_instance_audit(
 
 fn random_authorization_code() -> String {
     const ALPHABET: &[u8; 36] = b"abcdefghijklmnopqrstuvwxyz0123456789";
-    let mut value = String::with_capacity(32);
+    let mut value = String::with_capacity(36);
     let mut bytes = [0_u8; 64];
-    while value.len() < 32 {
+    while value.len() < 36 {
         OsRng.fill_bytes(&mut bytes);
         for byte in bytes {
             if byte < 252 {
                 value.push(ALPHABET[usize::from(byte % 36)] as char);
-                if value.len() == 32 {
+                if value.len() == 36 {
                     break;
                 }
             }
@@ -339,7 +365,7 @@ async fn load_instances(
 
 async fn load_users(state: &AppState) -> Result<Vec<AdminUser>, AppError> {
     let rows = sqlx::query(
-        "SELECT a.id,a.username,a.display_name,a.storage_path,a.quota_bytes,a.enabled, \
+        "SELECT a.id,a.username,a.display_name,a.storage_path,a.quota_bytes, \
          strftime('%Y-%m-%dT%H:%M:%SZ',a.created_at) AS created_at, \
          COALESCE((SELECT SUM(b.stored_size) FROM blobs b WHERE b.account_id=a.id),0) AS used_bytes, \
          COALESCE((SELECT SUM(p.expected_size) FROM upload_parts p JOIN uploads u ON u.id=p.upload_id WHERE u.account_id=a.id AND u.state='uploading'),0) AS pending_bytes, \
@@ -379,7 +405,6 @@ fn row_to_user(row: sqlx::sqlite::SqliteRow) -> AdminUser {
         pending_bytes: row.get("pending_bytes"),
         device_count: row.get("device_count"),
         resource_count: row.get("resource_count"),
-        enabled: row.get("enabled"),
         created_at: row.get("created_at"),
         last_seen_at: row.get("last_seen_at"),
         instances: Vec::new(),
@@ -559,7 +584,7 @@ mod tests {
     fn generated_authorization_codes_have_the_shared_format() {
         for _ in 0..64 {
             let value = random_authorization_code();
-            assert_eq!(value.len(), 32);
+            assert_eq!(value.len(), 36);
             assert!(value
                 .bytes()
                 .all(|byte| byte.is_ascii_digit() || byte.is_ascii_lowercase()));

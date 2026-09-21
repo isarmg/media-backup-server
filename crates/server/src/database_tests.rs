@@ -212,8 +212,8 @@ async fn production_pool_applies_pragmas_and_persists_after_reopen() {
     let account_id = Uuid::new_v4();
     sqlx::query(
         "INSERT INTO accounts(\
-             id, username, display_name, storage_path, quota_bytes, enabled, created_at\
-         ) VALUES (?, 'persistent-user', 'Persistent User', 'blobs/persistent', 1, true, datetime('now'))",
+             id, username, display_name, storage_path, quota_bytes, created_at\
+         ) VALUES (?, 'persistent-user', 'Persistent User', 'blobs/persistent', 1, datetime('now'))",
     )
     .bind(account_id)
     .execute(&pool)
@@ -484,7 +484,6 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                 "name": "Loose Admin DTO",
                 "storage_path": "blobs/loose-admin-dto",
                 "quota_bytes": 1,
-                "enabled": true,
                 "role": "user"
             }),
             None,
@@ -528,6 +527,23 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         .fetch_one(&pool)
         .await
         .expect("created instance account");
+    let admin_logs = json_body(
+        send(
+            &app,
+            json_request(
+                Method::GET,
+                "/api/v2/admin/logs",
+                json!({}),
+                None,
+                Some((&admin_cookie, &admin_csrf)),
+            ),
+            StatusCode::OK,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(admin_logs[0]["action"], "device.instance.create");
+    assert_eq!(admin_logs[0]["entity_id"], instance_id.to_string());
     let storage_path: String = sqlx::query_scalar("SELECT storage_path FROM accounts WHERE id=?")
         .bind(account_id)
         .fetch_one(&pool)
@@ -570,8 +586,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                     "username": generated_username,
                     "display_name": "Media Owner",
                     "storage_path": invalid_storage_path,
-                    "quota_bytes": 10_000_000,
-                    "enabled": true
+                    "quota_bytes": 10_000_000
                 }),
                 None,
                 Some((&admin_cookie, &admin_csrf)),
@@ -590,8 +605,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                 "username": generated_username,
                 "display_name": "Media Owner Updated",
                 "storage_path": storage_path,
-                "quota_bytes": 10_000_000,
-                "enabled": true
+                "quota_bytes": 10_000_000
             }),
             None,
             Some((&admin_cookie, &admin_csrf)),
@@ -662,8 +676,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
                 "username": disposable_username,
                 "display_name": "Disposable Instance",
                 "storage_path": format!("{storage_path}/nested"),
-                "quota_bytes": 1,
-                "enabled": true
+                "quota_bytes": 1
             }),
             None,
             Some((&admin_cookie, &admin_csrf)),
@@ -1246,8 +1259,8 @@ async fn seed_account(pool: &SqlitePool, storage_path: &str, suffix: &str) -> (U
     sqlx::query(
         r#"
         INSERT INTO accounts(
-            id, username, display_name, storage_path, quota_bytes, enabled, created_at
-        ) VALUES (?, ?, ?, ?, 100000000, TRUE, datetime('now'))
+            id, username, display_name, storage_path, quota_bytes, created_at
+        ) VALUES (?, ?, ?, ?, 100000000, datetime('now'))
         "#,
     )
     .bind(account_id)
@@ -1258,7 +1271,7 @@ async fn seed_account(pool: &SqlitePool, storage_path: &str, suffix: &str) -> (U
     .await
     .expect("insert commit test account");
     let device_id = Uuid::new_v4();
-    let authorization_code = format!("test-authorization-code-{suffix}-01234567890123456789");
+    let authorization_code = format!("{}0000", Uuid::new_v4().simple());
     let authorization_hash = sha2::Sha256::digest(authorization_code.as_bytes()).to_vec();
     let authorization_encrypted = crate::crypto::SecretBox::new(&[7; 32])
         .encrypt_client_authorization(&device_id.to_string(), &authorization_code)

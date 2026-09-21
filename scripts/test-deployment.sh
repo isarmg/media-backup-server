@@ -79,8 +79,8 @@ assert re.fullmatch(r"[0-9a-f]{40}", identity["source_revision"])
 assert identity["target"] == "x86_64-unknown-linux-gnu"
 assert identity["api_version"] == "v2"
 assert identity["storage_encoding"] == "plain-v1"
-assert identity["server_schema_revision"] == 4
-assert identity["server_schema_sha256"] == "84f0e8032d8814b8815b0a6a8a499e0e0d7bb44d37932cf78c1e75bd0b5826fe"
+assert identity["server_schema_revision"] == 5
+assert identity["server_schema_sha256"] == "a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e"
 assert identity["web_assets_sha256"] == "db9b3c1a4834afcb178e8984b20e81421ec80c812bad9d535ffb2b155300dd88"
 assert identity["release_contract_sha256"] == "61e7c0ffc3e781c1160a7b70eb249ab43f91a6135f028cb735f16c10bb85ceef"
 PY

@@ -604,6 +604,6 @@ mod tests {
         assert_eq!(summary.files, 0);
         assert_eq!(summary.blobs, 0);
         assert_eq!(summary.uploads, 0);
-        assert_eq!(summary.schema_revision, 4);
+        assert_eq!(summary.schema_revision, 5);
     }
 }

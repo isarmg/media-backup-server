@@ -107,7 +107,7 @@ cd media-backup-server-0.3.16-x86_64-unknown-linux-gnu
 - `target`：`x86_64-unknown-linux-gnu`
 - `api_version`：`v2`
 - `storage_encoding`：`plain-v1`
-- `server_schema_revision`：`4`
+- `server_schema_revision`：`5`
 
 `source_revision` 必须是 40 位小写十六进制 Git revision。`release-verify` 成功时只输出一行以
 `MEDIA_BACKUP_RELEASE_VERIFIED_V1` 开头的身份；失败时不要继续安装，也不要手工改 manifest。

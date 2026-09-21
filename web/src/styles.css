@@ -3,12 +3,15 @@
 .media-sections { grid-template-columns: minmax(0, 1fr); display: grid; gap: var(--sarmg-content-spacing, 16px); }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }
 .media-card { min-width: 0; overflow-wrap: anywhere; }
+.media-detail-list { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .55rem 1.25rem; margin: 0; }
+.media-detail-list dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .media-card dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .5rem 1rem; }
 .media-card dd { margin: 0; }
 .media-card progress { width: 100%; }
-.media-check { display: flex; align-items: center; gap: .5rem; }
-
 .media-overview-table { overflow-x: auto; }
 .media-overview-table th, .media-overview-table td { vertical-align: middle; }
 .media-overview-table td:last-child { overflow-wrap: anywhere; min-width: 12rem; }
 .media-overview-table progress { display: block; width: 100%; margin-top: .25rem; }
+.media-business .sarmg-table .sarmg-actions > .sarmg-button { display: inline-flex; align-items: center; justify-content: flex-start; min-width: 44px; padding-inline: 0; text-align: left; }
+.sarmg-instance-link, .sarmg-instance-link:visited { color: inherit; text-decoration: none; }
+.sarmg-instance-link:hover, .sarmg-instance-link:focus-visible { text-decoration: underline; }
