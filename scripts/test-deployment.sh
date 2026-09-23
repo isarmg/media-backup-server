@@ -81,7 +81,7 @@ assert identity["api_version"] == "v2"
 assert identity["storage_encoding"] == "plain-v1"
 assert identity["server_schema_revision"] == 5
 assert identity["server_schema_sha256"] == "a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e"
-assert identity["web_assets_sha256"] == "99dbf6f9afa4315ad8b23d3bb9db6b5bf3b84ab78280bea9cdd160853664488b"
+assert identity["web_assets_sha256"] == "b7e6908f80c192c866b2a03e25549b0bc9094eeea68e296d64a288df03f20180"
 assert identity["release_contract_sha256"] == "7ab157e620ded810e628254427637d01a9b9001f971c65f8f40a3d1b54bf5b0b"
 PY
 source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
