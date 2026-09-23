@@ -42,6 +42,7 @@ try {
       const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 390, height: 844 } });
       const page = await context.newPage(), errors = [], mutations = [];
       let users = [backupUser()], failCreate = true, failRotate = true, failDelete = true;
+      const expectedQuotaUpdates = [123456789, 107374182];
       let holdRotate = false, releaseRotate;
       page.on("pageerror", error => errors.push(error.message));
       await page.route("**/api/v2/**", async route => {
@@ -57,6 +58,12 @@ try {
           used_bytes: 1024, pending_bytes: 512, quota_bytes: users.reduce((sum, user) => sum + user.quota_bytes, 0),
         } });
         if (path === "/api/v2/admin/logs") return route.fulfill({ json: [{ sequence: 1, action: "backup.instance.create", entity_id: instanceId, occurred_at: time }] });
+        if (path === `/api/v2/admin/users/${userId}` && method === "PUT") {
+          const input = request.postDataJSON();
+          assert.equal(input.quota_bytes, expectedQuotaUpdates.shift());
+          Object.assign(users[0], input);
+          return route.fulfill({ json: users[0] });
+        }
         if (path === "/api/v2/admin/instances" && method === "POST") {
           const input = request.postDataJSON();
           assert.deepEqual(input, { name: "新实例" });
@@ -131,22 +138,31 @@ try {
       await expect(page.getByRole("link", { name: "返回实例列表", exact: true })).toHaveCount(0);
       const pairingDetails = page.getByRole("region", { name: "配对账户信息" });
       await expect(pairingDetails.getByRole("heading", { name: "验收备份账户", exact: true })).toBeVisible();
+      await expect(pairingDetails.getByText("实例名称", { exact: true })).toBeVisible();
+      await expect(pairingDetails.getByText("实例 ID", { exact: true })).toBeVisible();
       await expect(pairingDetails).toContainText(instanceId);
       await expect(pairingDetails).toContainText(code);
       await expect(page.getByRole("region", { name: "实例设置" })).toBeVisible();
       await expect(page.getByRole("region", { name: "备份状态", exact: true })).toBeVisible();
       await expect(page.getByRole("region", { name: "实例操作", exact: true })).toBeVisible();
       await expect(page.getByRole("form", { name: "编辑备份实例 验收备份账户", exact: true }).getByLabel("密码")).toHaveCount(0);
+      await expect(pairingDetails.getByText("实例授权码", { exact: true })).toBeVisible();
       await expect(page.getByRole("complementary")).toHaveCount(0);
       await expect(page.getByText(code, { exact: true })).toBeVisible();
+      const editForm = page.getByRole("form", { name: "编辑备份实例 验收备份账户", exact: true });
+      await editForm.getByRole("button", { name: "保存设置" }).click();
+      await expect.poll(() => expectedQuotaUpdates.length).toBe(1);
+      await editForm.getByLabel("配额（GiB，0 表示不限）").fill("0.1");
+      await editForm.getByRole("button", { name: "保存设置" }).click();
+      await expect.poll(() => users[0].quota_bytes).toBe(107374182);
       const rotationCount = () => mutations.filter(item => item.path.endsWith("/authorization")).length;
-      await page.getByRole("button", { name: "更换密码", exact: true }).click();
-      const rotationDialog = page.getByRole("dialog", { name: "更换密码", exact: true });
+      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
+      const rotationDialog = page.getByRole("dialog", { name: "更换授权码", exact: true });
       await expect(rotationDialog).toContainText("立即撤销当前客户端凭据");
       assert.equal(rotationCount(), 0);
       await rotationDialog.getByRole("button", { name: "取消", exact: true }).click();
       assert.equal(rotationCount(), 0);
-      await page.getByRole("button", { name: "更换密码", exact: true }).click();
+      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
       await rotationDialog.getByRole("button", { name: "确认", exact: true }).click();
       await expect(rotationDialog.getByRole("alert")).toContainText("rotate-failure-123");
       await expect(rotationDialog).toContainText("核对授权码后再操作");
@@ -155,7 +171,7 @@ try {
       await page.getByRole("group", { name: "全局操作" }).getByRole("button", { name: "刷新", exact: true }).click();
       await expect(page.getByText(code, { exact: true })).toBeVisible();
       holdRotate = true;
-      await page.getByRole("button", { name: "更换密码", exact: true }).click();
+      await page.getByRole("button", { name: "更换授权码", exact: true }).click();
       const confirmRotation = rotationDialog.getByRole("button", { name: "确认", exact: true });
       await confirmRotation.evaluate(button => { button.click(); button.click(); });
       await expect.poll(() => typeof releaseRotate).toBe("function");

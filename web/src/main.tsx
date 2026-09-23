@@ -24,9 +24,13 @@ function selectedUserFromLocation(): string | null {
   try { return decodeURIComponent(window.location.hash.slice(9)); } catch { return null; }
 }
 function quotaBytes(value: FormDataEntryValue | null): number {
-  const text = String(value ?? "").trim(), result = Number(text) * GIB;
-  if (text === "" || !Number.isSafeInteger(result) || result < 0) throw new Error("Invalid quota");
-  return result;
+  const text = String(value ?? "").trim();
+  const gib = Number(text);
+  const bytes = Math.round(gib * GIB);
+  if (text === "" || !Number.isFinite(gib) || gib < 0 || (gib > 0 && bytes === 0) || !Number.isSafeInteger(bytes)) {
+    throw new Error("Invalid quota");
+  }
+  return bytes;
 }
 function Application() {
   const [view, setView] = useState<View>(currentView);
@@ -42,7 +46,7 @@ function Application() {
     setCreating(true); setCreateFailure(null); window.location.hash = "instances";
     try {
       await request("/api/v2/admin/instances", isBackupInstance, { method: "POST", body: JSON.stringify({ name: t("新实例", "New instance") }) });
-      reload(); notify(t("备份实例已创建，可在详细信息中查看密码", "Backup instance created. Its password is available in details"));
+      reload(); notify(t("备份实例已创建，可在详细信息中查看授权码", "Backup instance created. Its authorization code is available in details"));
     } catch (error) { setCreateFailure({ requestId: errorRequestId(error) }); }
     finally { setCreating(false); }
   }
@@ -116,9 +120,9 @@ function PairingAccount({ user }: { user: BackupUser }) {
   if (!instance) return null;
   return <section className="sarmg-content-panel" aria-label={t("配对账户信息", "Pairing account information")}><h2>{user.display_name}</h2>
     <dl className="media-detail-list">
-      <dt>{t("账户名", "Account name")}</dt><dd>{user.display_name}</dd>
-      <dt>{t("账户", "Account")}</dt><dd><code>{instance.id}</code></dd>
-      <dt>{t("密码", "Password")}</dt><dd><code>{instance.authorization_code}</code></dd>
+      <dt>{t("实例名称", "Instance name")}</dt><dd>{user.display_name}</dd>
+      <dt>{t("实例 ID", "Instance ID")}</dt><dd><code>{instance.id}</code></dd>
+      <dt>{t("实例授权码", "Instance authorization code")}</dt><dd><code>{instance.authorization_code}</code></dd>
       <dt>{t("配对状态", "Pairing status")}</dt><dd><StatusBadge status={instance.status} /></dd>
     </dl>
   </section>;
@@ -143,8 +147,10 @@ function BackupUserForm({ user, reload }: { user: BackupUser; reload(): void }) 
     event.preventDefault(); if (busy.current) return;
     const form = event.currentTarget, data = new FormData(form); setFailure(null);
     try {
+      const quotaText = String(data.get("quota_gib") ?? "").trim();
       const input = { username: String(data.get("username") ?? ""), display_name: String(data.get("display_name") ?? ""),
-        storage_path: String(data.get("storage_path") ?? ""), quota_bytes: quotaBytes(data.get("quota_gib")) };
+        storage_path: String(data.get("storage_path") ?? ""),
+        quota_bytes: quotaText === String(user.quota_bytes / GIB) ? user.quota_bytes : quotaBytes(quotaText) };
       void save(input);
     } catch (error) { setFailure({ requestId: errorRequestId(error) }); }
   }
@@ -200,8 +206,8 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
   return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("实例操作", "Instance actions")}>
     <h2>{t("实例操作", "Instance actions")}</h2>
     <p>{t("实例拥有一个长期客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "The instance owns one long-lived client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
-    {user.instances.length > 0 && user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <div className="sarmg-content-stack" key={instance.id}>{user.instances.length > 1 && <h3>{instance.name}</h3>}<div className="sarmg-actions">{!terminal && <Button disabled={pending} onClick={() => { setFailure(null); setRotating(instance); }}>{t("更换密码", "Change password")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></div></div>; })}
-    {rotating && <ConfirmDangerDialog title={t("更换密码", "Change password")} description={t("更换密码会立即撤销当前客户端凭据。客户端必须使用新授权码重新配对。", "Changing the password immediately revokes the current client credential. The client must pair again using the new authorization code.")} pending={pending} onClose={() => { if (!busy.current) { setRotating(null); setFailure(null); } }} onConfirm={() => void rotate(rotating)}>{failure?.action === "rotate" && <ErrorState requestId={failure.requestId}>{t("更换结果未能确认，请关闭此窗口并刷新实例信息，核对授权码后再操作。", "The change could not be confirmed. Close this dialog and refresh the instance details to check the authorization code before continuing.")}</ErrorState>}</ConfirmDangerDialog>}
+    {user.instances.length > 0 && user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <div className="sarmg-content-stack" key={instance.id}>{user.instances.length > 1 && <h3>{instance.name}</h3>}<div className="sarmg-actions">{!terminal && <Button disabled={pending} onClick={() => { setFailure(null); setRotating(instance); }}>{t("更换授权码", "Change authorization code")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></div></div>; })}
+    {rotating && <ConfirmDangerDialog title={t("更换授权码", "Change authorization code")} description={t("更换授权码会立即撤销当前客户端凭据。客户端必须使用新授权码重新配对。", "Changing the authorization code immediately revokes the current client credential. The client must pair again using the new authorization code.")} pending={pending} onClose={() => { if (!busy.current) { setRotating(null); setFailure(null); } }} onConfirm={() => void rotate(rotating)}>{failure?.action === "rotate" && <ErrorState requestId={failure.requestId}>{t("更换结果未能确认，请关闭此窗口并刷新实例信息，核对授权码后再操作。", "The change could not be confirmed. Close this dialog and refresh the instance details to check the authorization code before continuing.")}</ErrorState>}</ConfirmDangerDialog>}
     {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) { setRemove(null); setFailure(null); } }} onConfirm={() => void removeInstance(remove)}>{failure?.action === "remove" && <ErrorState requestId={failure.requestId}>{terminal ? t("实例仍有备份记录或暂时无法删除，请处理后重试。", "The instance still owns backup records or cannot currently be deleted. Resolve the issue and retry.") : t("未能取消或撤销实例，请重试。", "Unable to cancel or revoke the instance. Please retry.")}</ErrorState>}</ConfirmDangerDialog>; })()}
   </section>;
 }
