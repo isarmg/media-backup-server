@@ -1,6 +1,6 @@
 # Media Backup Server
 
-Media Backup Server `0.3.20` 是自托管的照片与视频备份服务。Rust/Axum 服务端负责移动设备配对、分块上传、媒体索引和文件交付，内置管理 Web 用于管理备份实例、账号和运行状态。
+Media Backup Server `0.3.21` 是自托管的照片与视频备份服务。Rust/Axum 服务端负责移动设备配对、分块上传、媒体索引和文件交付，内置管理 Web 用于管理备份实例、账号和运行状态。
 
 正式 Server 仅支持 Linux AMD64 GNU（`x86_64-unknown-linux-gnu`）。Android/iOS 应用位于独立的 [media-backup-client](https://github.com/isarmg/media-backup-client) 仓库。
 
@@ -30,7 +30,7 @@ mkdir -p "$PWD/dist"
   "$PWD/target/x86_64-unknown-linux-gnu/release/media-backup-server" \
   "$revision" "$PWD/dist"
 ./scripts/test-deployment.sh \
-  "$PWD/dist/media-backup-server-0.3.20-x86_64-unknown-linux-gnu.tar.gz"
+  "$PWD/dist/media-backup-server-0.3.21-x86_64-unknown-linux-gnu.tar.gz"
 ```
 
 发行树安装、启动、账号维护、备份和恢复步骤见[运维文档](docs/operations.md)。

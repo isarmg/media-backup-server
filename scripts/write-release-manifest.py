@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create the strict Media Backup 0.2 server release manifest."""
+"""Create the current strict Media Backup Server release manifest."""
 
 from __future__ import annotations
 
@@ -171,7 +171,7 @@ def main() -> None:
         fail("binary release identity has an unknown or missing field")
     fixed_identity = {
         "product": "media-backup-server",
-        "version": "0.3.20",
+        "version": "0.3.21",
         "source_revision": revision,
         "target": "x86_64-unknown-linux-gnu",
         "api_version": "v2",
