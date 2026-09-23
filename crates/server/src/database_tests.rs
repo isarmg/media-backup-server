@@ -542,8 +542,8 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
         .await,
     )
     .await;
-    assert_eq!(admin_logs[0]["action"], "device.instance.create");
-    assert_eq!(admin_logs[0]["entity_id"], instance_id.to_string());
+    assert_eq!(admin_logs["logs"][0]["action"], "device.instance.create");
+    assert_eq!(admin_logs["logs"][0]["entity_id"], instance_id.to_string());
     let storage_path: String = sqlx::query_scalar("SELECT storage_path FROM accounts WHERE id=?")
         .bind(account_id)
         .fetch_one(&pool)
@@ -2176,4 +2176,138 @@ async fn gallery_filters_snapshot_previews_and_streaming_preserve_account_bounda
             .as_ref(),
         bytes
     );
+}
+
+#[tokio::test]
+async fn administrator_logs_return_every_event_on_the_selected_server_day() {
+    let workspace = TestWorkspace::new();
+    let (state, pool) = test_state(&workspace.database(), &workspace.data()).await;
+    let app = test_router(state).await;
+    let login = send(
+        &app,
+        json_request(
+            Method::POST,
+            "/api/v2/auth/login",
+            json!({"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD}),
+            None,
+            None,
+        ),
+        StatusCode::OK,
+    )
+    .await;
+    let cookie = login.headers()[header::SET_COOKIE]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap()
+        .to_owned();
+    let csrf = json_body(login).await["csrf_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    send(
+        &app,
+        json_request(
+            Method::POST,
+            "/api/v2/admin/instances",
+            json!({"name": "Log fixture"}),
+            None,
+            Some((&cookie, &csrf)),
+        ),
+        StatusCode::CREATED,
+    )
+    .await;
+    let account_id: Uuid = sqlx::query_scalar("SELECT id FROM accounts LIMIT 1")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let today: String = sqlx::query_scalar("SELECT date('now', 'localtime')")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let yesterday: String = sqlx::query_scalar("SELECT date(?1, '-1 day')")
+        .bind(&today)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let tomorrow: String = sqlx::query_scalar("SELECT date(?1, '+1 day')")
+        .bind(&today)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    for index in 0..205 {
+        sqlx::query("INSERT INTO audit_events(account_id, actor_kind, action, occurred_at) VALUES (?, 'administrator', ?, datetime('now'))")
+            .bind(account_id)
+            .bind(format!("bulk.{index}"))
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    for (action, date, time) in [
+        ("boundary.previous", yesterday.as_str(), "23:59:59"),
+        ("boundary.start", today.as_str(), "00:00:00"),
+        ("boundary.next", tomorrow.as_str(), "00:00:00"),
+    ] {
+        let occurred_at: String = sqlx::query_scalar("SELECT datetime(?1 || ' ' || ?2, 'utc')")
+            .bind(date)
+            .bind(time)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO audit_events(account_id, actor_kind, action, occurred_at) VALUES (?, 'administrator', ?, ?)")
+            .bind(account_id)
+            .bind(action)
+            .bind(occurred_at)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+    let get_logs =
+        |uri: String| json_request(Method::GET, uri, json!({}), None, Some((&cookie, &csrf)));
+    let default =
+        json_body(send(&app, get_logs("/api/v2/admin/logs".into()), StatusCode::OK).await).await;
+    assert_eq!(default["date"], today);
+    let logs = default["logs"].as_array().unwrap();
+    assert_eq!(logs.len(), 207, "the entire selected day is returned");
+    assert!(logs
+        .iter()
+        .all(|log| log["occurred_at"].as_str().unwrap().starts_with(&today)));
+    assert!(logs.iter().any(|log| log["action"] == "bulk.0"));
+    assert!(logs.iter().any(|log| log["action"] == "boundary.start"));
+    assert!(!logs
+        .iter()
+        .any(|log| log["action"] == "boundary.previous" || log["action"] == "boundary.next"));
+
+    let previous = json_body(
+        send(
+            &app,
+            get_logs(format!("/api/v2/admin/logs?date={yesterday}")),
+            StatusCode::OK,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(previous["date"], yesterday);
+    assert_eq!(previous["logs"].as_array().unwrap().len(), 1);
+    assert_eq!(previous["logs"][0]["action"], "boundary.previous");
+    let next = json_body(
+        send(
+            &app,
+            get_logs(format!("/api/v2/admin/logs?date={tomorrow}")),
+            StatusCode::OK,
+        )
+        .await,
+    )
+    .await;
+    assert_eq!(next["logs"].as_array().unwrap().len(), 1);
+    assert_eq!(next["logs"][0]["action"], "boundary.next");
+    for date in ["2025-02-29", "2026-13-01", "0000-01-01"] {
+        send(
+            &app,
+            get_logs(format!("/api/v2/admin/logs?date={date}")),
+            StatusCode::BAD_REQUEST,
+        )
+        .await;
+    }
 }

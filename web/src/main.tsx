@@ -10,11 +10,12 @@ import "@sarmg/design-tokens/accessibility.css";
 import "../fonts/fonts.css";
 import "@sarmg/admin-ui/styles.css";
 import "./styles.css";
-import { administratorApi, isBackupInstance, isBackupUser, isOverview, isUndefined, request, type BackupInstance, type BackupUser, type Overview } from "./api";
+import { administratorApi, isAdminLogs, isBackupInstance, isBackupUser, isOverview, isUndefined, request, type AdminLogs, type BackupInstance, type BackupUser, type Overview } from "./api";
 
 type Failure = { requestId?: string };
 type View = "instances" | "details" | "logs";
 const GIB = 1_073_741_824;
+const LOG_RESPONSE_BYTES = 64 * 1024 * 1024;
 function currentView(): View {
   const hash = window.location.hash.slice(1);
   return hash.startsWith("details/") ? "details" : hash === "logs" ? "logs" : "instances";
@@ -56,6 +57,7 @@ function Application() {
     return () => window.removeEventListener("hashchange", changed);
   }, []);
   useEffect(() => {
+    if (view === "logs") return;
     const controller = new AbortController(); setOverview(null); setFailure(null);
     void request("/api/v2/admin/overview", isOverview, { signal: controller.signal })
       .then(value => { if (!controller.signal.aborted) setOverview(value); })
@@ -68,9 +70,9 @@ function Application() {
     <InstancePageNavigation page={view} detailsDisabled={!selected} navigate={value => { window.location.hash = value === "details" && selected ? `details/${encodeURIComponent(selected)}` : value; }} />
     <h1 className="sarmg-visually-hidden">{view === "instances" ? t("备份实例列表", "Backup instance list") : view === "details" ? t("备份详细信息", "Backup details") : t("备份日志", "Backup logs")}</h1>
     {createFailure && <ErrorState requestId={createFailure.requestId}>{t("实例未能创建，请刷新列表核对后重试。", "The instance could not be created. Refresh the list before retrying.")}</ErrorState>}
-    {failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
+    {view === "logs" ? <LogsView refreshGeneration={generation} /> : failure ? <ErrorState requestId={failure.requestId} onRetry={reload}>{t("备份数据暂不可用，请重试。", "Backup data is temporarily unavailable. Please retry.")}</ErrorState>
       : overview === null ? <LoadingState>{t("正在载入备份数据…", "Loading backup data…")}</LoadingState>
-      : view === "instances" ? <OverviewView overview={overview} reload={reload} /> : view === "logs" ? <LogsView /> : user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("请选择一个备份实例。", "Select a backup instance.")}</EmptyState>}
+      : view === "instances" ? <OverviewView overview={overview} reload={reload} /> : user ? <UsersView overview={{...overview, users:[user]}} reload={reload} /> : <EmptyState>{t("请选择一个备份实例。", "Select a backup instance.")}</EmptyState>}
   </div>;
 }
 
@@ -212,20 +214,32 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
   </section>;
 }
 
-function LogsView() {
-  const [logs, setLogs] = useState<Array<{ sequence: number; action: string; entity_id: string; occurred_at: string }> | null>(null);
+function LogsView({ refreshGeneration }: { refreshGeneration: number }) {
+  const [selectedDate, setSelectedDate] = useState("");
+  const [requestedDate, setRequestedDate] = useState<string | null>(null);
+  const [result, setResult] = useState<AdminLogs | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [generation, setGeneration] = useState(0);
   useEffect(() => {
-    const controller = new AbortController(); setLogs(null); setFailure(null);
-    void request("/api/v2/admin/logs", (value): value is Array<{ sequence: number; action: string; entity_id: string; occurred_at: string }> => Array.isArray(value) && value.every(item => typeof item === "object" && item !== null && typeof (item as any).sequence === "number" && typeof (item as any).action === "string" && typeof (item as any).entity_id === "string" && typeof (item as any).occurred_at === "string"), { signal: controller.signal })
-      .then(value => { if (!controller.signal.aborted) setLogs(value); })
+    if (requestedDate === "") return;
+    const controller = new AbortController(); setResult(null); setFailure(null);
+    const path = "/api/v2/admin/logs" + (requestedDate === null ? "" : `?date=${encodeURIComponent(requestedDate)}`);
+    void request(path, isAdminLogs, { signal: controller.signal, maxResponseBytes: LOG_RESPONSE_BYTES, timeoutMs: 120_000 })
+      .then(value => { if (!controller.signal.aborted) { setResult(value); if (requestedDate === null) setSelectedDate(value.date); } })
       .catch(error => { if (!controller.signal.aborted) setFailure({ requestId: errorRequestId(error) }); });
     return () => controller.abort();
-  }, [generation]);
-  if (failure) return <ErrorState requestId={failure.requestId} onRetry={() => setGeneration(value => value + 1)}>{t("日志暂不可用，请重试。", "Logs are temporarily unavailable. Please retry.")}</ErrorState>;
-  if (logs === null) return <LoadingState>{t("正在加载日志…", "Loading logs…")}</LoadingState>;
-  return <section className="sarmg-content-stack"><h2>{t("日志", "Logs")}</h2>{logs.length === 0 ? <EmptyState>{t("暂无日志", "No logs")}</EmptyState> : <Table><thead><tr><th>{t("时间", "Time")}</th><th>{t("操作", "Action")}</th><th>{t("对象", "Entity")}</th></tr></thead><tbody>{logs.map(log => <tr key={log.sequence}><td>{log.occurred_at}</td><td>{log.action}</td><td>{log.entity_id}</td></tr>)}</tbody></Table>}</section>;
+  }, [requestedDate, generation, refreshGeneration]);
+  const logs = result?.date === selectedDate ? result.logs : null;
+  return <section className="sarmg-content-stack"><h2>{t("日志", "Logs")}</h2>
+    <p>{t("按服务器日期显示所选日期的全部日志。", "Shows every log from the selected date in the server's time zone.")}</p>
+    <div className="sarmg-actions"><FormField label={t("日志日期", "Log date")}><TextField type="date" value={selectedDate} onChange={event => { const date = event.target.value; setSelectedDate(date); setRequestedDate(date); setResult(null); setFailure(null); }} /></FormField>
+      <Button onClick={() => { setResult(null); setGeneration(value => value + 1); }} disabled={selectedDate === ""}>{t("刷新日志", "Refresh logs")}</Button></div>
+    {selectedDate === "" && requestedDate === "" ? <EmptyState>{t("请选择日志日期", "Select a log date")}</EmptyState>
+      : failure ? <ErrorState requestId={failure.requestId} onRetry={() => setGeneration(value => value + 1)}>{t("日志暂不可用，请重试。", "Logs are temporarily unavailable. Please retry.")}</ErrorState>
+      : logs === null ? <LoadingState>{t("正在加载日志…", "Loading logs…")}</LoadingState>
+      : logs.length === 0 ? <EmptyState>{t("所选日期暂无日志", "No logs on the selected date")}</EmptyState>
+      : <Table><thead><tr><th>{t("服务器时间", "Server time")}</th><th>{t("操作", "Action")}</th><th>{t("对象", "Entity")}</th></tr></thead><tbody>{logs.map(log => <tr key={log.sequence}><td>{log.occurred_at}</td><td>{log.action}</td><td>{log.entity_id}</td></tr>)}</tbody></Table>}
+  </section>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) { return <section className="sarmg-content-stack"><h2>{title}</h2>{children}</section>; }

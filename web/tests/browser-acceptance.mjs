@@ -23,6 +23,8 @@ async function assertColumnContentAlignment(table) {
 }
 const time = "2026-09-04T00:00:00Z", userId = "018f1f4b-7a5d-7b5f-8d31-123456789abc";
 const instanceId = "018f1f4b-7a5d-7b5f-8d31-123456789abd", code = "m".repeat(36);
+const serverDate = "2042-07-06", previousDate = "2042-07-05";
+const logBudgetPadding = "x".repeat(2 * 1024 * 1024);
 function instance(overrides = {}) {
   return { id: instanceId, name: "验收手机", platform: "android", status: "pending", online: false, authorization_code: code, created_at: time, last_seen_at: "", ...overrides };
 }
@@ -39,8 +41,9 @@ try {
   for (const engine of [chromium, firefox]) {
     const browser = await engine.launch();
     try {
-      const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 390, height: 844 } });
+      const context = await browser.newContext({ locale: "zh-CN", timezoneId: "America/Los_Angeles", viewport: { width: 390, height: 844 } });
       const page = await context.newPage(), errors = [], mutations = [];
+      const logQueries = [];
       let users = [backupUser()], failCreate = true, failRotate = true, failDelete = true;
       const expectedQuotaUpdates = [123456789, 107374182];
       let holdRotate = false, releaseRotate;
@@ -57,7 +60,14 @@ try {
           unlimited_users: users.filter(user => user.quota_bytes === 0).length,
           used_bytes: 1024, pending_bytes: 512, quota_bytes: users.reduce((sum, user) => sum + user.quota_bytes, 0),
         } });
-        if (path === "/api/v2/admin/logs") return route.fulfill({ json: [{ sequence: 1, action: "backup.instance.create", entity_id: instanceId, occurred_at: time }] });
+        if (path === "/api/v2/admin/logs") {
+          const date = new URL(request.url()).searchParams.get("date");
+          logQueries.push(date);
+          assert.ok(date === null || date === serverDate || date === previousDate);
+          return route.fulfill({ json: date === previousDate
+            ? { date: previousDate, logs: [{ sequence: 1, action: "backup.instance.rotate", entity_id: instanceId, occurred_at: `${previousDate} 23:59:59 +08:00` }] }
+            : { date: serverDate, logs: Array.from({ length: 225 }, (_, index) => ({ sequence: index + 2, action: `backup.instance.create.${index}`, entity_id: instanceId, occurred_at: `${serverDate} 00:00:00 +08:00` })), transport_budget_fixture: logBudgetPadding } });
+        }
         if (path === `/api/v2/admin/users/${userId}` && method === "PUT") {
           const input = request.postDataJSON();
           assert.equal(input.quota_bytes, expectedQuotaUpdates.shift());
@@ -197,7 +207,20 @@ try {
       await expect(page.getByRole("link", { name: "验收备份账户", exact: true })).toHaveCount(0);
 
       await page.getByRole("button", { name: "日志", exact: true }).click();
-      await expect(page.getByText("backup.instance.create", { exact: true })).toBeVisible();
+      const logDate = page.getByLabel("日志日期");
+      await expect(logDate).toHaveValue(serverDate);
+      await expect(page.getByRole("table").locator("tbody tr")).toHaveCount(225);
+      await expect(page.getByText("backup.instance.create.0", { exact: true })).toBeVisible();
+      assert.ok(logQueries.every(date => date === null), "initial date comes from the server response");
+      await logDate.fill(previousDate);
+      await expect(page.getByText("backup.instance.rotate", { exact: true })).toBeVisible();
+      await expect(page.getByRole("table").locator("tbody tr")).toHaveCount(1);
+      assert.equal(logQueries.at(-1), previousDate);
+      await page.getByRole("button", { name: "刷新日志", exact: true }).click();
+      await expect.poll(() => logQueries.filter(date => date === previousDate).length).toBe(2);
+      await page.getByRole("group", { name: "全局操作" }).getByRole("button", { name: "刷新", exact: true }).click();
+      await expect.poll(() => logQueries.filter(date => date === previousDate).length).toBe(3);
+      await expect(logDate).toHaveValue(previousDate);
       await page.goto(`http://127.0.0.1:${address.port}/admin/#details/018f1f4b-7a5d-7b5f-8d31-123456789abe`);
       await expect(page.getByRole("button", { name: "详细信息", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(page.getByRole("form", { name: "编辑备份实例 新实例", exact: true })).toBeVisible();

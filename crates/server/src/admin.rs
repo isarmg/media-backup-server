@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Request, State},
+    extract::{Path, Query, Request, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::Next,
     response::{Html, IntoResponse, Response},
@@ -93,6 +93,69 @@ pub(crate) struct AdminLog {
     occurred_at: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct LogsQuery {
+    date: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct AdminLogs {
+    date: String,
+    logs: Vec<AdminLog>,
+}
+
+fn valid_calendar_date(date: &str) -> bool {
+    let bytes = date.as_bytes();
+    if bytes.len() != 10
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| index == 4 || index == 7 || byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let year = date[..4].parse::<u32>().unwrap_or(0);
+    let month = date[5..7].parse::<u32>().unwrap_or(0);
+    let day = date[8..10].parse::<u32>().unwrap_or(0);
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    year > 0 && (1..=days).contains(&day)
+}
+
+fn server_local_time(local: String, utc_offset_seconds: i64) -> Result<String, AppError> {
+    if utc_offset_seconds.unsigned_abs() > 24 * 3600 {
+        return Err(AppError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "server time offset is invalid",
+        ));
+    }
+    let sign = if utc_offset_seconds < 0 { '-' } else { '+' };
+    let minutes = utc_offset_seconds.unsigned_abs() / 60;
+    let seconds = utc_offset_seconds.unsigned_abs() % 60;
+    if seconds == 0 {
+        Ok(format!(
+            "{local} {sign}{:02}:{:02}",
+            minutes / 60,
+            minutes % 60
+        ))
+    } else {
+        Ok(format!(
+            "{local} {sign}{:02}:{:02}:{seconds:02}",
+            minutes / 60,
+            minutes % 60
+        ))
+    }
+}
+
 pub(crate) async fn require_admin(
     State(state): State<AppState>,
     mut request: Request,
@@ -137,7 +200,31 @@ pub(crate) async fn overview(State(state): State<AppState>) -> Result<Json<Overv
     }))
 }
 
-pub(crate) async fn logs(State(state): State<AppState>) -> Result<Json<Vec<AdminLog>>, AppError> {
+pub(crate) async fn logs(
+    State(state): State<AppState>,
+    Query(query): Query<LogsQuery>,
+) -> Result<Json<AdminLogs>, AppError> {
+    let date = match query.date {
+        Some(date) if valid_calendar_date(&date) => date,
+        Some(_) => return Err(AppError::bad_request("date must be a valid YYYY-MM-DD")),
+        None => {
+            sqlx::query_scalar("SELECT date('now', 'localtime')")
+                .fetch_one(&state.pool)
+                .await?
+        }
+    };
+    // SQLite audit timestamps are UTC. Convert each server-local midnight
+    // separately so a daylight-saving transition gives a 23- or 25-hour day.
+    let (start_utc, end_utc): (Option<String>, Option<String>) = sqlx::query_as(
+        "SELECT datetime(?1 || ' 00:00:00', 'utc'), \
+                datetime(date(?1, '+1 day') || ' 00:00:00', 'utc')",
+    )
+    .bind(&date)
+    .fetch_one(&state.pool)
+    .await?;
+    let (Some(start_utc), Some(end_utc)) = (start_utc, end_utc) else {
+        return Err(AppError::bad_request("date is outside the supported range"));
+    };
     let rows = sqlx::query(
         r#"
         SELECT sequence, action,
@@ -151,12 +238,16 @@ pub(crate) async fn logs(State(state): State<AppState>) -> Result<Json<Vec<Admin
                          substr(hex(entity_id), 21, 12))
                  ELSE CAST(entity_id AS TEXT)
                END AS entity_id,
-               strftime('%Y-%m-%dT%H:%M:%SZ', occurred_at) AS occurred_at
+               strftime('%Y-%m-%d %H:%M:%S', occurred_at, 'localtime') AS occurred_at,
+               CAST(strftime('%s', occurred_at, 'localtime') AS INTEGER) -
+               CAST(strftime('%s', occurred_at) AS INTEGER) AS utc_offset_seconds
         FROM audit_events
+        WHERE occurred_at >= ? AND occurred_at < ?
         ORDER BY sequence DESC
-        LIMIT 200
         "#,
     )
+    .bind(start_utc)
+    .bind(end_utc)
     .fetch_all(&state.pool)
     .await?;
     let logs = rows
@@ -166,11 +257,14 @@ pub(crate) async fn logs(State(state): State<AppState>) -> Result<Json<Vec<Admin
                 sequence: row.try_get("sequence")?,
                 action: row.try_get("action")?,
                 entity_id: row.try_get("entity_id")?,
-                occurred_at: row.try_get("occurred_at")?,
+                occurred_at: server_local_time(
+                    row.try_get("occurred_at")?,
+                    row.try_get("utc_offset_seconds")?,
+                )?,
             })
         })
-        .collect::<Result<Vec<_>, sqlx::Error>>()?;
-    Ok(Json(logs))
+        .collect::<Result<Vec<_>, AppError>>()?;
+    Ok(Json(AdminLogs { date, logs }))
 }
 
 pub(crate) async fn create_instance(
@@ -599,6 +693,79 @@ fn static_asset_response(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn log_dates_are_strict_gregorian_calendar_dates() {
+        for date in ["2024-02-29", "2026-09-23", "2000-02-29"] {
+            assert!(valid_calendar_date(date), "{date}");
+        }
+        for date in [
+            "",
+            "2025-02-29",
+            "1900-02-29",
+            "2026-04-31",
+            "2026-00-01",
+            "2026-13-01",
+            "0000-01-01",
+            "2026-01-00",
+            "2026-1-01",
+            "2026-01-01Z",
+            "２０２６-01-01",
+        ] {
+            assert!(!valid_calendar_date(date), "{date}");
+        }
+    }
+
+    #[test]
+    fn log_times_include_the_server_offset_for_repeated_clock_hours() {
+        assert_eq!(
+            server_local_time("2026-11-01 01:30:00".into(), -4 * 3600).unwrap(),
+            "2026-11-01 01:30:00 -04:00"
+        );
+        assert_eq!(
+            server_local_time("2026-11-01 01:30:00".into(), -5 * 3600).unwrap(),
+            "2026-11-01 01:30:00 -05:00"
+        );
+        assert_eq!(
+            server_local_time("2026-09-23 14:30:00".into(), 5 * 3600 + 30 * 60).unwrap(),
+            "2026-09-23 14:30:00 +05:30"
+        );
+    }
+
+    #[test]
+    fn local_midnight_bounds_follow_daylight_saving_transitions() {
+        const CHILD: &str = "MEDIA_BACKUP_LOG_DST_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .env("TZ", "America/New_York")
+                .env(CHILD, "1")
+                .arg("--exact")
+                .arg("admin::tests::local_midnight_bounds_follow_daylight_saving_transitions")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        let database = rusqlite::Connection::open_in_memory().unwrap();
+        let bounds = |day: &str| {
+            database
+                .query_row(
+                    "SELECT datetime(?1 || ' 00:00:00', 'utc'), \
+                            datetime(date(?1, '+1 day') || ' 00:00:00', 'utc')",
+                    [day],
+                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+                )
+                .unwrap()
+        };
+        assert_eq!(
+            bounds("2026-03-08"),
+            ("2026-03-08 05:00:00".into(), "2026-03-09 04:00:00".into())
+        );
+        assert_eq!(
+            bounds("2026-11-01"),
+            ("2026-11-01 04:00:00".into(), "2026-11-02 05:00:00".into())
+        );
+    }
 
     #[test]
     fn generated_authorization_codes_have_the_shared_format() {

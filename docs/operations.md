@@ -83,6 +83,13 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
 Session 是固定平台策略，不提供产品级 TTL 配置。管理员登录来源使用真实 socket peer，不信任转发来源头。
 
+管理 Web 的日志页使用 Server 本地时区的日历日期。`GET /api/v2/admin/logs` 返回
+`{date,logs}`，其中 `date` 是 Server 当天的 `YYYY-MM-DD`；传入 `?date=YYYY-MM-DD` 可查看指定日期。
+返回该日全部管理员审计记录，按审计序号倒序，无分页。日期边界由两个 Server 本地午夜分别换算为 UTC，
+夏令时切换日仍按完整日历日筛选；`occurred_at` 展示为 Server 本地时间并附 UTC 偏移，以区分回拨时
+重复的本地时刻。浏览器单次日志响应预算为 64 MiB、请求时限为 120 秒。账户级
+`GET /v2/audit-events` 保持独立的账户授权和分页合同。
+
 Android/iOS 只向 `/v2/auth/bootstrap` 提交服务器地址、实例授权码和设备信息。授权码在管理员直接新建备份实例时生成，服务端保存密文和独立查找摘要；更换授权码会清除旧设备 Token 并要求重新配对。旧数据库和账户密码 bootstrap 不受支持，Server 遇到旧 Schema 会拒绝启动。
 
 最小 Caddy 配置：

@@ -29,6 +29,7 @@ export type BackupInstance = {
 };
 
 export type AdminLog = { sequence: number; action: string; entity_id: string; occurred_at: string };
+export type AdminLogs = { date: string; logs: AdminLog[] };
 
 export type Overview = {
   users: BackupUser[];
@@ -47,6 +48,12 @@ const isString = (value: unknown): value is string => typeof value === "string";
 const isNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value);
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
+
+export const isAdminLogs: JsonGuard<AdminLogs> = (value): value is AdminLogs =>
+  isRecord(value) && isString(value.date) && /^\d{4}-\d{2}-\d{2}$/.test(value.date) &&
+  Array.isArray(value.logs) && value.logs.every((item: unknown) =>
+    isRecord(item) && isNumber(item.sequence) && isString(item.action) &&
+    isString(item.entity_id) && isString(item.occurred_at));
 
 export const isBackupInstance: JsonGuard<BackupInstance> = (value): value is BackupInstance =>
   isRecord(value) && ["id", "name", "platform", "status", "authorization_code", "created_at", "last_seen_at"].every(key => isString(value[key])) && /^[a-z0-9]{36}$/.test(value.authorization_code as string) && isBoolean(value.online);
@@ -79,7 +86,7 @@ export const isOverview: JsonGuard<Overview> = (value): value is Overview =>
 export function request<T>(
   path: string,
   guard: JsonGuard<T>,
-  init?: RequestInit,
+  init?: RequestInit & { maxResponseBytes?: number; timeoutMs?: number },
 ): Promise<T> {
   if (!path.startsWith("/api/v2/admin/")) {
     throw new TypeError("Media Backup 管理 API 必须位于 /api/v2/admin/");
