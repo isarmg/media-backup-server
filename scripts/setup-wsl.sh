@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly product="media-backup-server"
-readonly version="0.3.19"
+readonly version="0.3.20"
 readonly target="x86_64-unknown-linux-gnu"
 readonly release_contract_sha256="7ab157e620ded810e628254427637d01a9b9001f971c65f8f40a3d1b54bf5b0b"
 readonly service_user="isarmg-media"
@@ -156,7 +156,7 @@ expected_identity_keys = {
 }
 expected_identity = {
     "product": "media-backup-server",
-    "version": "0.3.19",
+    "version": "0.3.20",
     "target": "x86_64-unknown-linux-gnu",
     "api_version": "v2",
     "storage_encoding": "plain-v1",
@@ -461,7 +461,7 @@ preflight_config_path="$(rooted "$config_file")"
 preflight_unit_path="$(rooted "$unit_file")"
 validate_empty_release_destination
 if [[ -e "$preflight_release_path" || -L "$preflight_release_path" ]]; then
-  die "release 0.3.19 destination already exists; installation is one-shot and no-clobber"
+  die "release 0.3.20 destination already exists; installation is one-shot and no-clobber"
 fi
 if [[ -e "$preflight_config_path" || -L "$preflight_config_path" ]]; then
   ensure_single_link_regular_file "$preflight_config_path" "configuration"
@@ -494,7 +494,7 @@ if [[ "$test_mode" == "0" ]]; then
 fi
 
 [[ ! -e "$release_path" && ! -L "$release_path" ]] ||
-  die "release 0.3.19 destination appeared during installation"
+  die "release 0.3.20 destination appeared during installation"
 if [[ -e "$config_path" || -L "$config_path" ]]; then
   ensure_single_link_regular_file "$config_path" "configuration"
 fi

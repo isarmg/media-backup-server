@@ -107,7 +107,7 @@ function OverviewView({ overview, reload }: { overview: Overview; reload(): void
 
 function UsersView({ overview, reload }: { overview: Overview; reload(): void }) {
   return <div className="sarmg-content-stack">
-    {overview.users.length === 0 ? <EmptyState>{t("暂无备份实例", "No backup instances yet")}</EmptyState> : overview.users.map(user => <div key={user.id} className="sarmg-content-stack"><PairingAccount user={user} /><BackupUserForm user={user} reload={reload} /><InstanceManager user={user} reload={reload} /></div>)}
+    {overview.users.length === 0 ? <EmptyState>{t("暂无备份实例", "No backup instances yet")}</EmptyState> : overview.users.map(user => <div key={user.id} className="sarmg-content-stack"><PairingAccount user={user} /><BackupStatus user={user} /><BackupUserForm user={user} reload={reload} /><InstanceManager user={user} reload={reload} /></div>)}
   </div>;
 }
 
@@ -162,6 +162,13 @@ function BackupUserForm({ user, reload }: { user: BackupUser; reload(): void }) 
   </section>;
 }
 
+function BackupStatus({ user }: { user: BackupUser }) {
+  return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("备份状态", "Backup status")}>
+    <h2>{t("备份状态", "Backup status")}</h2>
+    {user.instances.map(instance => <div key={instance.id}><dl className="media-detail-list"><dt>{t("客户端", "Client")}</dt><dd>{instance.name}</dd><dt>{t("平台", "Platform")}</dt><dd>{instance.platform}</dd><dt>{t("在线状态", "Online status")}</dt><dd>{instance.online ? t("在线", "Online") : t("离线", "Offline")}</dd><dt>{t("最后在线", "Last seen")}</dt><dd>{instance.last_seen_at || t("尚未配对", "Not paired yet")}</dd></dl></div>)}
+  </section>;
+}
+
 function InstanceManager({ user, reload }: { user: BackupUser; reload(): void }) {
   const { notify } = useAdminApplication();
   const busy = useRef(false);
@@ -190,10 +197,10 @@ function InstanceManager({ user, reload }: { user: BackupUser; reload(): void })
       setFailure({ action: "remove", requestId: errorRequestId(error) });
     } finally { busy.current = false; setPending(false); }
   }
-  return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("备份状态与实例操作", "Backup status and instance actions")}>
-    <h2>{t("备份状态与实例操作", "Backup status and instance actions")}</h2>
+  return <section className="sarmg-content-panel sarmg-content-stack" aria-label={t("实例操作", "Instance actions")}>
+    <h2>{t("实例操作", "Instance actions")}</h2>
     <p>{t("实例拥有一个长期客户端授权码。服务端加密保存并可查看；更换后旧客户端立即失效并需要重新配对。", "The instance owns one long-lived client authorization code. The server stores it encrypted and keeps it viewable; changing it invalidates the old client and requires pairing again.")}</p>
-    {user.instances.length > 0 && user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <div className="sarmg-content-stack" key={instance.id}><dl className="media-detail-list"><dt>{t("客户端", "Client")}</dt><dd>{instance.name}</dd><dt>{t("平台", "Platform")}</dt><dd>{instance.platform}</dd><dt>{t("在线状态", "Online status")}</dt><dd>{instance.online ? t("在线", "Online") : t("离线", "Offline")}</dd><dt>{t("最后在线", "Last seen")}</dt><dd>{instance.last_seen_at || t("尚未配对", "Not paired yet")}</dd></dl><div className="sarmg-actions">{!terminal && <Button disabled={pending} onClick={() => { setFailure(null); setRotating(instance); }}>{t("更换密码", "Change password")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></div></div>; })}
+    {user.instances.length > 0 && user.instances.map(instance => { const terminal = instance.status === "cancelled" || instance.status === "revoked"; return <div className="sarmg-content-stack" key={instance.id}>{user.instances.length > 1 && <h3>{instance.name}</h3>}<div className="sarmg-actions">{!terminal && <Button disabled={pending} onClick={() => { setFailure(null); setRotating(instance); }}>{t("更换密码", "Change password")}</Button>}<Button disabled={pending} onClick={() => { setFailure(null); setRemove(instance); }}>{instance.status === "pending" ? t("取消配对", "Cancel pairing") : terminal ? t("删除实例", "Delete instance") : t("撤销实例", "Revoke instance")}</Button></div></div>; })}
     {rotating && <ConfirmDangerDialog title={t("更换密码", "Change password")} description={t("更换密码会立即撤销当前客户端凭据。客户端必须使用新授权码重新配对。", "Changing the password immediately revokes the current client credential. The client must pair again using the new authorization code.")} pending={pending} onClose={() => { if (!busy.current) { setRotating(null); setFailure(null); } }} onConfirm={() => void rotate(rotating)}>{failure?.action === "rotate" && <ErrorState requestId={failure.requestId}>{t("更换结果未能确认，请关闭此窗口并刷新实例信息，核对授权码后再操作。", "The change could not be confirmed. Close this dialog and refresh the instance details to check the authorization code before continuing.")}</ErrorState>}</ConfirmDangerDialog>}
     {remove && (() => { const terminal = remove.status === "cancelled" || remove.status === "revoked"; return <ConfirmDangerDialog title={terminal ? t("删除实例", "Delete instance") : t("取消或撤销实例", "Cancel or revoke instance")} description={terminal ? t("永久删除这条终态且没有备份数据的实例信息。", "Permanently delete this terminal instance entry when it owns no backup data.") : t("授权码和访问令牌将立即失效。终态实例之后可从列表永久删除。", "The authorization code and access token are invalidated immediately. The terminal instance can then be permanently deleted from the list.")} pending={pending} onClose={() => { if (!pending) { setRemove(null); setFailure(null); } }} onConfirm={() => void removeInstance(remove)}>{failure?.action === "remove" && <ErrorState requestId={failure.requestId}>{terminal ? t("实例仍有备份记录或暂时无法删除，请处理后重试。", "The instance still owns backup records or cannot currently be deleted. Resolve the issue and retry.") : t("未能取消或撤销实例，请重试。", "Unable to cancel or revoke the instance. Please retry.")}</ErrorState>}</ConfirmDangerDialog>; })()}
   </section>;

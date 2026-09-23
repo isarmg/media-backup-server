@@ -1,6 +1,6 @@
 # Media Backup Server 文档总览
 
-本文档集描述 Server `0.3.19` 的当前代码。服务端数据库合同独立保持为 `media-backup` `0.3.0`、
+本文档集描述 Server `0.3.20` 的当前代码。服务端数据库合同独立保持为 `media-backup` `0.3.0`、
 schema revision 5；软件版本、数据库版本和 Client 移动状态版本不是同一个编号。
 
 | 文档 | 适用对象 | 内容 |

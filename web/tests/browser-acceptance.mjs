@@ -134,7 +134,8 @@ try {
       await expect(pairingDetails).toContainText(instanceId);
       await expect(pairingDetails).toContainText(code);
       await expect(page.getByRole("region", { name: "实例设置" })).toBeVisible();
-      await expect(page.getByRole("region", { name: "备份状态与实例操作" })).toBeVisible();
+      await expect(page.getByRole("region", { name: "备份状态", exact: true })).toBeVisible();
+      await expect(page.getByRole("region", { name: "实例操作", exact: true })).toBeVisible();
       await expect(page.getByRole("form", { name: "编辑备份实例 验收备份账户", exact: true }).getByLabel("密码")).toHaveCount(0);
       await expect(page.getByRole("complementary")).toHaveCount(0);
       await expect(page.getByText(code, { exact: true })).toBeVisible();
