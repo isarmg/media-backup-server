@@ -220,7 +220,7 @@ JavaScript 安全整数范围；超出范围时返回结构化错误，不返回
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 Foundation `=0.9.1` / `84966364c5b4662104e05741b3045482e4fd4fc8`；八个 Web 包使用
+当前 Server Rust 固定 Foundation `=0.9.2` / `0174fc1b6ffcdf876e6dc7c715f107266582410e`；八个 Web 包使用
 同版正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
 归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。

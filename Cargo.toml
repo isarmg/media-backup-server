@@ -37,5 +37,5 @@ tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-sarmg-secret = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "84966364c5b4662104e05741b3045482e4fd4fc8", version = "=0.9.1" }
-sarmg-secret-envelope = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "84966364c5b4662104e05741b3045482e4fd4fc8", version = "=0.9.1" }
+sarmg-secret = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "0174fc1b6ffcdf876e6dc7c715f107266582410e", version = "=0.9.2" }
+sarmg-secret-envelope = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "0174fc1b6ffcdf876e6dc7c715f107266582410e", version = "=0.9.2" }
