@@ -42,6 +42,7 @@ try {
       const context = await browser.newContext({ locale: "zh-CN", viewport: { width: 390, height: 844 } });
       const page = await context.newPage(), errors = [], mutations = [];
       let users = [backupUser()], failCreate = true, failRotate = true, failDelete = true;
+      let holdRotate = false, releaseRotate;
       page.on("pageerror", error => errors.push(error.message));
       await page.route("**/api/v2/**", async route => {
         const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
@@ -68,6 +69,7 @@ try {
         const rotateMatch = path.match(/^\/api\/v2\/admin\/instances\/([^/]+)\/authorization$/);
         if (rotateMatch && method === "PUT") {
           if (failRotate) { failRotate = false; return route.fulfill({ status: 503, json: { code: "service_unavailable", message: "SECRET rotate", retryable: true, request_id: "rotate-failure-123" } }); }
+          if (holdRotate) await new Promise(resolve => { releaseRotate = resolve; });
           const target = users.flatMap(user => user.instances).find(item => item.id === rotateMatch[1]);
           Object.assign(target, { authorization_code: "r".repeat(36), status: "pending" });
           return route.fulfill({ json: target });
@@ -151,8 +153,17 @@ try {
       await rotationDialog.getByRole("button", { name: "取消", exact: true }).click();
       await page.getByRole("group", { name: "全局操作" }).getByRole("button", { name: "刷新", exact: true }).click();
       await expect(page.getByText(code, { exact: true })).toBeVisible();
+      holdRotate = true;
       await page.getByRole("button", { name: "更换密码", exact: true }).click();
-      await rotationDialog.getByRole("button", { name: "确认", exact: true }).click();
+      const confirmRotation = rotationDialog.getByRole("button", { name: "确认", exact: true });
+      await confirmRotation.evaluate(button => { button.click(); button.click(); });
+      await expect.poll(() => typeof releaseRotate).toBe("function");
+      await expect(rotationDialog.getByRole("button", { name: "正在处理…", exact: true })).toBeDisabled();
+      assert.equal(rotationCount(), 2, "duplicate confirmations must not dispatch another rotation");
+      await page.keyboard.press("Escape");
+      await expect(rotationDialog).toBeVisible();
+      holdRotate = false;
+      releaseRotate();
       await expect(page.getByText("r".repeat(36), { exact: true })).toBeVisible();
       assert.equal(rotationCount(), 2);
       await page.getByRole("button", { name: "取消配对", exact: true }).click();
