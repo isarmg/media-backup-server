@@ -13,6 +13,23 @@ use uuid::Uuid;
 
 use crate::{error::AppError, routes::AppState};
 
+// Administrator JSON is consumed as exact JavaScript integers.
+const MAX_JSON_INTEGER: i64 = (1_i64 << 53) - 1;
+
+fn sum_overview_bytes(mut values: impl Iterator<Item = i64>) -> Result<i64, AppError> {
+    values.try_fold(0_i64, |total, value| {
+        total
+            .checked_add(value)
+            .filter(|sum| value >= 0 && *sum <= MAX_JSON_INTEGER)
+            .ok_or_else(|| {
+                AppError::new(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "administrator byte total is outside the JSON integer range",
+                )
+            })
+    })
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct CreateInstanceRequest {
@@ -102,13 +119,14 @@ pub(crate) async fn overview(State(state): State<AppState>) -> Result<Json<Overv
     let users = load_users(&state).await?;
     let total_users = users.len() as i64;
     let unlimited_users = users.iter().filter(|user| user.quota_bytes == 0).count() as i64;
-    let used_bytes = users.iter().map(|user| user.used_bytes).sum();
-    let pending_bytes = users.iter().map(|user| user.pending_bytes).sum();
-    let quota_bytes = users
-        .iter()
-        .filter(|user| user.quota_bytes > 0)
-        .map(|user| user.quota_bytes)
-        .sum();
+    let used_bytes = sum_overview_bytes(users.iter().map(|user| user.used_bytes))?;
+    let pending_bytes = sum_overview_bytes(users.iter().map(|user| user.pending_bytes))?;
+    let quota_bytes = sum_overview_bytes(
+        users
+            .iter()
+            .filter(|user| user.quota_bytes > 0)
+            .map(|user| user.quota_bytes),
+    )?;
     Ok(Json(Overview {
         users,
         total_users,
@@ -430,8 +448,10 @@ fn validate_policy(
     {
         return Err(AppError::bad_request("invalid storage_path"));
     }
-    if quota_bytes < 0 {
-        return Err(AppError::bad_request("quota_bytes cannot be negative"));
+    if !(0..=MAX_JSON_INTEGER).contains(&quota_bytes) {
+        return Err(AppError::bad_request(
+            "quota_bytes must be a non-negative safe JSON integer",
+        ));
     }
     Ok(())
 }
@@ -598,6 +618,24 @@ mod tests {
             assert!(validate_policy(&character.repeat(33), "blobs/test", 0).is_err());
         }
         assert!(validate_policy("bad\nname", "blobs/test", 0).is_err());
+    }
+
+    #[test]
+    fn quota_and_overview_totals_keep_exact_json_integer_boundaries() {
+        for quota in [0, 1, MAX_JSON_INTEGER] {
+            assert!(validate_policy("instance", "blobs/test", quota).is_ok());
+        }
+        for quota in [-1, MAX_JSON_INTEGER + 1, i64::MAX] {
+            assert!(validate_policy("instance", "blobs/test", quota).is_err());
+        }
+        assert_eq!(sum_overview_bytes([0, 100, 23].into_iter()).unwrap(), 123);
+        assert_eq!(
+            sum_overview_bytes([MAX_JSON_INTEGER, 0].into_iter()).unwrap(),
+            MAX_JSON_INTEGER
+        );
+        for values in [[MAX_JSON_INTEGER, 1], [i64::MAX, i64::MAX], [-1, 2]] {
+            assert!(sum_overview_bytes(values.into_iter()).is_err());
+        }
     }
 
     #[test]

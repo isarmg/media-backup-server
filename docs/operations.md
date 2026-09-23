@@ -77,7 +77,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 
 浏览器认证合同只有三条：`POST /api/v2/auth/login`、`GET /api/v2/auth/session`、
 `POST /api/v2/auth/logout`。登录 body 精确为 `{username,password}`；登录和 session 成功体精确为
-`{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不再是客户端登录凭据；它与 `_sarmg_administrators.username` 是不同身份域。
+`{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不能作为客户端登录凭据；它与 `_sarmg_administrators.username` 是不同身份域。
 用户管理等业务位于 `/api/v2/admin/*`，移动端仍只使用 `/v2/*`。管理员 username 规范化、严格
 当前 Argon2id、登录准入、Session/CSRF 生命周期、Cookie 和安全审计均由 Foundation 的
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
@@ -201,6 +201,9 @@ HTTP 响应和发行身份校验，发行包 `share/web/` 必须包含相同字�
 内部 `accounts` 仅作为上传数据的隔离与配额边界，不是登录身份，也不会在产品页面暴露账号或密码。当前管理员只能
 从右上角人物图标进入 Foundation 账户设置。实例创建后永久启用；写请求失败不会自动重放，界面仅显示安全错误和
 Request ID。
+
+管理 API 的单实例配额范围为 0～9007199254740991 bytes（0 表示不限）。概览容量合计也必须处于
+JavaScript 安全整数范围；超出范围时返回结构化错误，不返回截断、环绕或不精确的计数。
 
 “更换密码”先显示确认窗口，说明现有客户端凭据立即失效且需要重新配对；取消不会发送写请求。
 确认后的请求执行期间禁止重复提交。若请求结果无法确认，界面提示关闭窗口并刷新实例信息，
