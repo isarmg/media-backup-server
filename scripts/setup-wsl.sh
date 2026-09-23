@@ -2,9 +2,9 @@
 set -euo pipefail
 
 readonly product="media-backup-server"
-readonly version="0.3.18"
+readonly version="0.3.19"
 readonly target="x86_64-unknown-linux-gnu"
-readonly release_contract_sha256="8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724"
+readonly release_contract_sha256="7ab157e620ded810e628254427637d01a9b9001f971c65f8f40a3d1b54bf5b0b"
 readonly service_user="isarmg-media"
 readonly service_group="isarmg-media"
 readonly app_dir="/opt/isarmg/media-backup"
@@ -156,14 +156,14 @@ expected_identity_keys = {
 }
 expected_identity = {
     "product": "media-backup-server",
-    "version": "0.3.18",
+    "version": "0.3.19",
     "target": "x86_64-unknown-linux-gnu",
     "api_version": "v2",
     "storage_encoding": "plain-v1",
     "server_schema_revision": 5,
     "server_schema_sha256": "a07c5723568cfcbf379a2173225122dc5db4e2168a50700d7f256aba3de5957e",
     "web_assets_sha256": "99dbf6f9afa4315ad8b23d3bb9db6b5bf3b84ab78280bea9cdd160853664488b",
-    "release_contract_sha256": "8b534c2131f23bec06a6fb638ab666e717104a545f7c81da501a69f3bb534724",
+    "release_contract_sha256": "7ab157e620ded810e628254427637d01a9b9001f971c65f8f40a3d1b54bf5b0b",
 }
 expected_directories = {
     "bin", "config", "docs", "scripts", "share", "share/web",
@@ -461,7 +461,7 @@ preflight_config_path="$(rooted "$config_file")"
 preflight_unit_path="$(rooted "$unit_file")"
 validate_empty_release_destination
 if [[ -e "$preflight_release_path" || -L "$preflight_release_path" ]]; then
-  die "release 0.3.18 destination already exists; installation is one-shot and no-clobber"
+  die "release 0.3.19 destination already exists; installation is one-shot and no-clobber"
 fi
 if [[ -e "$preflight_config_path" || -L "$preflight_config_path" ]]; then
   ensure_single_link_regular_file "$preflight_config_path" "configuration"
@@ -494,7 +494,7 @@ if [[ "$test_mode" == "0" ]]; then
 fi
 
 [[ ! -e "$release_path" && ! -L "$release_path" ]] ||
-  die "release 0.3.18 destination appeared during installation"
+  die "release 0.3.19 destination appeared during installation"
 if [[ -e "$config_path" || -L "$config_path" ]]; then
   ensure_single_link_regular_file "$config_path" "configuration"
 fi

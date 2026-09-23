@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.3.18"
+version = "0.3.19"
 edition = "2021"
 rust-version = "1.98"
 authors = ["sarmg <isarmg@163.com>"]
@@ -37,5 +37,5 @@ tower-http = { version = "0.6", features = ["trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-sarmg-secret = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "2908f7598571a47c1469bfa08a08c4776cc93049", version = "=0.8.9" }
-sarmg-secret-envelope = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "2908f7598571a47c1469bfa08a08c4776cc93049", version = "=0.8.9" }
+sarmg-secret = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "84966364c5b4662104e05741b3045482e4fd4fc8", version = "=0.9.1" }
+sarmg-secret-envelope = { git = "https://github.com/isarmg/sarmg-foundation-server.git", rev = "84966364c5b4662104e05741b3045482e4fd4fc8", version = "=0.9.1" }
