@@ -202,6 +202,10 @@ HTTP 响应和发行身份校验，发行包 `share/web/` 必须包含相同字�
 从右上角人物图标进入 Foundation 账户设置。实例创建后永久启用；写请求失败不会自动重放，界面仅显示安全错误和
 Request ID。
 
+“更换密码”先显示确认窗口，说明现有客户端凭据立即失效且需要重新配对；取消不会发送写请求。
+确认后的请求执行期间禁止重复提交。若请求结果无法确认，界面提示关闭窗口并刷新实例信息，
+核对当前授权码后再决定下一步操作。
+
 `npm run test:browser --prefix web` 对实际 dist 运行 Chromium/Firefox 验收，覆盖实例原子创建与配对、
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
