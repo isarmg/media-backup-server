@@ -151,12 +151,11 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 
 ## 7. 当前状态备份与恢复
 
-Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 的 Media Backup 支持矩阵只覆盖
-`0.2.0` / revision 1，**不支持**这里的 `0.3.0` / revision 5 数据库与配套 `DATA_DIR`，因此目前没有
-受支持的产品级备份/恢复命令。不得用旧适配器、只复制 SQLite 或手改 identity 来绕过这一缺口；生产上线
-前必须先为 `sarmg-upgrade` 增加并验证精确的 0.3.0/revision 5 状态适配器，使 SQLite 主文件、sidecar
-与 `DATA_DIR` 作为同一一致性单元处理。适配器可用后仍应执行加密 3-2-1 备份和隔离恢复演练，恢复后先
-运行离线验证与 `doctor` 再开放流量。
+Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 对 `0.3.0` / revision 5 提供
+SQLite 与 `DATA_DIR` 的组合备份、校验、恢复及恢复中断处理；执行前以正式制品的 `support --json`
+核对精确能力。不得只复制 SQLite 或手改数据库 identity。执行加密 3-2-1 备份和隔离恢复演练，恢复后先
+运行离线验证与 `doctor` 再开放流量。当前 `upgrade_edges` 为空，组合备份与恢复不能用作迁移到新
+Schema 的路径；若 Schema 身份变化，须先由 `sarmg-upgrade` 提供并验证对应的离线迁移边。
 
 ## 8. 移动端构建
 
@@ -170,8 +169,8 @@ Media Backup 二进制不提供相关命令。当前 `sarmg-upgrade` 的 Media B
 3. 检查代理真实 peer、TLS、`TRUSTED_PROXY_CIDRS` 和客户端时间。
 4. 运行 `doctor`，区分数据库合同、文件系统、Hash 或上传恢复错误。
 5. 移动端检查系统权限、后台任务限制、本地队列和安全凭据存储。
-6. 若是版本/Schema 问题，停止服务并先核对 `sarmg-upgrade` 的精确支持矩阵；当前 0.3.0/revision 5
-   不受支持，不能调用旧适配器，也不要把兼容代码加入 Server。
+6. 若是版本/Schema 问题，停止服务并先核对 `sarmg-upgrade` 的精确支持矩阵；当前工具支持
+   0.3.0/revision 5 的组合备份与恢复，但没有迁移到新 Schema 的迁移边，也不要把兼容代码加入 Server。
 
 移动 Client 的到期 `retry_wait` 会复用仍持久化的 `prepared_json` 和分块，不重新读取已删除的导出源。
 没有准备结果的任务才重新读取源文件；准备在持久化前失败时可能留下未引用 generation，后续成功准备
