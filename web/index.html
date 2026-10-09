@@ -1,0 +1,24 @@
+<!doctype html>
+<html data-xcss-fonts="pending" lang="zh-CN" data-xcss-appearance="content-blocks">
+  <head>
+    <style id="xcss-font-boot">
+/* Inline in HTML before any stylesheet or application script can load. */
+html[data-xcss-fonts="pending"] { background: #fff !important; }
+html[data-xcss-fonts="pending"][data-theme="dark"] { background: #151a1d !important; }
+html[data-xcss-fonts="pending"] body { visibility: hidden !important; }
+@media (prefers-color-scheme: dark) {
+  html[data-xcss-fonts="pending"]:not([data-theme="light"]) { background: #151a1d !important; }
+}
+    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="preload" href="/admin/assets/MapleMonoBootstrap-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <link rel="preload" href="/admin/assets/MapleMonoBootstrap-Bold.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+    <title>Media Backup</title>
+  </head>
+  <body data-xcss-scope>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

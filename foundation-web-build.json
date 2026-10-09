@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "web": {
+    "directory": "web",
+    "script": "build",
+    "dist": "dist"
+  },
+  "rust": {
+    "manifest": "Cargo.toml",
+    "package": "xszs",
+    "binary": "xszs",
+    "source_revision_env": "XSZS_SOURCE_REVISION"
+  }
+}

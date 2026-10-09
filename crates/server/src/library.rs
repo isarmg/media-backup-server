@@ -1,0 +1,1070 @@
+use axum::{
+    Json,
+    extract::{Extension, State},
+    http::StatusCode,
+};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use serde::{Deserialize, Serialize};
+use sqlx::{QueryBuilder, Row, Sqlite, SqliteConnection, SqlitePool};
+use std::collections::HashMap;
+use uuid::Uuid;
+use xcss_server_cli::{ContractJson, ContractPath, ContractQuery};
+use xszs_protocol::{
+    API_BASE_PATH, AlbumRecord, AssetSummary, CreateTagRequest, DuplicateGroup, EmptyRequest,
+    MediaKind, ResourceSummary, SetTagAssetsRequest, StorageEncoding, SyncAlbumRequest, SyncEvent,
+    SyncPage, TagRecord, TimelinePage, UpdateAssetRequest,
+};
+
+use crate::{audit, auth::AuthContext, error::AppError, routes::AppState};
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimelineQuery {
+    cursor: Option<String>,
+    limit: Option<u32>,
+    #[serde(default)]
+    trashed: bool,
+    favorite: Option<bool>,
+    archived: Option<bool>,
+    album_id: Option<Uuid>,
+    tag_id: Option<Uuid>,
+    media_kind: Option<MediaKind>,
+    from_ms: Option<i64>,
+    to_ms: Option<i64>,
+    device_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TimelineCursor {
+    created_at_ms: i64,
+    asset_id: Uuid,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SyncQuery {
+    #[serde(default)]
+    after: i64,
+    limit: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DuplicateQuery {
+    limit: Option<u32>,
+}
+
+/// Result of draining blob rows that no resource references. The blob row is
+/// the durable deletion intent: it is removed in the same SQLite transaction
+/// that unlinks the object, so a filesystem failure never creates an
+/// untracked object outside the database.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct OrphanBlobReconcileReport {
+    pub removed: u64,
+    pub errors: u64,
+}
+
+pub async fn timeline(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractQuery(query): ContractQuery<TimelineQuery>,
+) -> Result<Json<TimelinePage>, AppError> {
+    if query
+        .from_ms
+        .zip(query.to_ms)
+        .is_some_and(|(start, end)| start >= end)
+    {
+        return Err(AppError::bad_request("from_ms must be before to_ms"));
+    }
+    let kind = query.media_kind.as_ref().map(|value| match value {
+        MediaKind::Photo => "photo",
+        MediaKind::Video => "video",
+        MediaKind::Other => "other",
+    });
+    let mut transaction = state.pool.begin().await?;
+    let limit = query.limit.unwrap_or(100).clamp(1, 250) as i64;
+    let cursor = query.cursor.as_deref().map(decode_cursor).transpose()?;
+    let before_ms = cursor.as_ref().map(|value| value.created_at_ms);
+    let before_id = cursor.as_ref().map(|value| value.asset_id);
+    let rows = sqlx::query(
+        r#"
+        SELECT id, source_created_at_ms
+        FROM assets
+        WHERE account_id = ?1
+          AND ((?2 AND deleted_at IS NOT NULL) OR (NOT ?2 AND deleted_at IS NULL))
+          AND EXISTS (SELECT 1 FROM resources r WHERE r.asset_id = assets.id)
+          AND (?3 IS NULL OR source_created_at_ms < ?3 OR (source_created_at_ms = ?3 AND id < ?4))
+          AND (?5 IS NULL OR favorite = ?5)
+          AND (?6 IS NULL OR archived = ?6)
+          AND (?7 IS NULL OR EXISTS (
+              SELECT 1 FROM album_assets aa WHERE aa.album_id = ?7 AND aa.asset_id = assets.id
+          ))
+          AND (?8 IS NULL OR EXISTS (
+              SELECT 1 FROM tag_assets ta WHERE ta.tag_id = ?8 AND ta.asset_id = assets.id
+          ))
+          AND (?9 IS NULL OR media_kind = ?9)
+          AND (?10 IS NULL OR source_created_at_ms >= ?10)
+          AND (?11 IS NULL OR source_created_at_ms < ?11)
+          AND (?12 IS NULL OR device_id = ?12)
+        ORDER BY source_created_at_ms DESC, id DESC
+        LIMIT ?13
+        "#,
+    )
+    .bind(auth.account_id)
+    .bind(query.trashed)
+    .bind(before_ms)
+    .bind(before_id)
+    .bind(query.favorite)
+    .bind(query.archived)
+    .bind(query.album_id)
+    .bind(query.tag_id)
+    .bind(kind)
+    .bind(query.from_ms)
+    .bind(query.to_ms)
+    .bind(query.device_id)
+    .bind(limit + 1)
+    .fetch_all(&mut *transaction)
+    .await?;
+    let has_more = rows.len() as i64 > limit;
+    let selected = rows.into_iter().take(limit as usize).collect::<Vec<_>>();
+    let ids = selected
+        .iter()
+        .map(|row| row.get("id"))
+        .collect::<Vec<Uuid>>();
+    let items = load_asset_summaries(&mut transaction, auth.account_id, &ids).await?;
+    transaction.commit().await?;
+    let next_cursor = if has_more {
+        selected.last().map(|row| {
+            encode_cursor(&TimelineCursor {
+                created_at_ms: row.get("source_created_at_ms"),
+                asset_id: row.get("id"),
+            })
+        })
+    } else {
+        None
+    };
+    Ok(Json(TimelinePage { items, next_cursor }))
+}
+
+pub async fn sync_changes(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractQuery(query): ContractQuery<SyncQuery>,
+) -> Result<Json<SyncPage>, AppError> {
+    if query.after < 0 {
+        return Err(AppError::bad_request("sync cursor cannot be negative"));
+    }
+    let limit = query.limit.unwrap_or(250).clamp(1, 1000) as i64;
+    let rows = sqlx::query(
+        r#"
+        SELECT sequence, entity_kind, entity_id, operation,
+               (CAST(strftime('%s', changed_at) AS INTEGER) * 1000) AS changed_at_ms
+        FROM account_changes
+        WHERE account_id = ? AND sequence > ?
+        ORDER BY sequence
+        LIMIT ?
+        "#,
+    )
+    .bind(auth.account_id)
+    .bind(query.after)
+    .bind(limit + 1)
+    .fetch_all(&state.pool)
+    .await?;
+    let has_more = rows.len() as i64 > limit;
+    let events = rows
+        .into_iter()
+        .take(limit as usize)
+        .map(|row| SyncEvent {
+            sequence: row.get("sequence"),
+            entity_kind: row.get("entity_kind"),
+            entity_id: row.get("entity_id"),
+            operation: row.get("operation"),
+            changed_at_ms: row.get("changed_at_ms"),
+        })
+        .collect::<Vec<_>>();
+    let next_sequence = events
+        .last()
+        .map(|event| event.sequence)
+        .unwrap_or(query.after);
+    Ok(Json(SyncPage {
+        events,
+        next_sequence,
+        has_more,
+    }))
+}
+
+pub async fn update_asset(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath(asset_id): ContractPath<Uuid>,
+    ContractJson(request): ContractJson<UpdateAssetRequest>,
+) -> Result<Json<AssetSummary>, AppError> {
+    if request.favorite.is_none() && request.archived.is_none() {
+        return Err(AppError::bad_request("no asset state was supplied"));
+    }
+    let mut transaction = state.pool.begin().await?;
+    let updated: Option<Uuid> = sqlx::query_scalar(
+        r#"
+        UPDATE assets SET
+            favorite = COALESCE(?1, favorite),
+            archived = COALESCE(?2, archived),
+            updated_at = datetime('now')
+        WHERE id = ?3 AND account_id = ?4
+        RETURNING id
+        "#,
+    )
+    .bind(request.favorite)
+    .bind(request.archived)
+    .bind(asset_id)
+    .bind(auth.account_id)
+    .fetch_optional(&mut *transaction)
+    .await?;
+    updated.ok_or_else(|| AppError::not_found("asset not found"))?;
+    audit::record_change(
+        &mut transaction,
+        auth.account_id,
+        "asset",
+        asset_id,
+        "upsert",
+    )
+    .await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        &auth,
+        "asset.update",
+        Some("asset"),
+        Some(asset_id),
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(Json(
+        load_asset_summary(&state.pool, auth.account_id, asset_id).await?,
+    ))
+}
+
+pub async fn get_asset(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath(asset_id): ContractPath<Uuid>,
+) -> Result<Json<AssetSummary>, AppError> {
+    Ok(Json(
+        load_asset_summary(&state.pool, auth.account_id, asset_id).await?,
+    ))
+}
+
+pub async fn trash_asset(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath(asset_id): ContractPath<Uuid>,
+    ContractJson(_request): ContractJson<EmptyRequest>,
+) -> Result<StatusCode, AppError> {
+    set_trashed(&state, &auth, asset_id, true).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn restore_asset(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath(asset_id): ContractPath<Uuid>,
+    ContractJson(_request): ContractJson<EmptyRequest>,
+) -> Result<StatusCode, AppError> {
+    set_trashed(&state, &auth, asset_id, false).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn set_trashed(
+    state: &AppState,
+    auth: &AuthContext,
+    asset_id: Uuid,
+    trashed: bool,
+) -> Result<(), AppError> {
+    let mut transaction = state.pool.begin().await?;
+    let changed = sqlx::query(
+        "UPDATE assets \
+         SET deleted_at = CASE WHEN ?1 THEN datetime('now') ELSE NULL END, \
+             updated_at = datetime('now') \
+         WHERE id = ?2 AND account_id = ?3",
+    )
+    .bind(trashed)
+    .bind(asset_id)
+    .bind(auth.account_id)
+    .execute(&mut *transaction)
+    .await?;
+    if changed.rows_affected() == 0 {
+        return Err(AppError::not_found("asset not found"));
+    }
+    audit::record_change(
+        &mut transaction,
+        auth.account_id,
+        "asset",
+        asset_id,
+        "upsert",
+    )
+    .await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        auth,
+        if trashed {
+            "asset.trash"
+        } else {
+            "asset.restore"
+        },
+        Some("asset"),
+        Some(asset_id),
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+pub async fn delete_asset_permanently(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath(asset_id): ContractPath<Uuid>,
+    ContractJson(_request): ContractJson<EmptyRequest>,
+) -> Result<StatusCode, AppError> {
+    let mut transaction = state.pool.begin().await?;
+    let blob_ids: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT DISTINCT r.blob_id FROM resources r
+        JOIN assets a ON a.id = r.asset_id
+        WHERE a.id = ? AND a.account_id = ? AND a.deleted_at IS NOT NULL
+        "#,
+    )
+    .bind(asset_id)
+    .bind(auth.account_id)
+    .fetch_all(&mut *transaction)
+    .await?;
+    if blob_ids.is_empty() {
+        return Err(AppError::not_found("trashed asset not found"));
+    }
+    sqlx::query("DELETE FROM assets WHERE id = ? AND account_id = ? AND deleted_at IS NOT NULL")
+        .bind(asset_id)
+        .bind(auth.account_id)
+        .execute(&mut *transaction)
+        .await?;
+    audit::record_change(
+        &mut transaction,
+        auth.account_id,
+        "asset",
+        asset_id,
+        "delete",
+    )
+    .await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        &auth,
+        "asset.delete",
+        Some("asset"),
+        Some(asset_id),
+    )
+    .await?;
+    transaction.commit().await?;
+
+    // The asset deletion is already durable. Physical reclamation is a
+    // separate, retryable close-out step; never return 500 after committing
+    // the user-visible delete because that would invite an unsafe replay.
+    match reconcile_orphan_blobs(&state, Some(auth.account_id)).await {
+        Ok(report) if report.errors == 0 => Ok(StatusCode::NO_CONTENT),
+        Ok(report) => {
+            tracing::warn!(
+                account_id = %auth.account_id,
+                pending = report.errors,
+                "asset metadata was deleted; blob reclamation remains queued"
+            );
+            Ok(StatusCode::ACCEPTED)
+        }
+        Err(error) => {
+            tracing::error!(
+                account_id = %auth.account_id,
+                ?error,
+                "asset metadata was deleted; blob reconciliation could not be scanned"
+            );
+            Ok(StatusCode::ACCEPTED)
+        }
+    }
+}
+
+/// Remove unreferenced blob objects without ever losing their durable lookup
+/// row first. `DELETE ... RETURNING` obtains SQLite's write lock and makes the
+/// row unavailable to concurrent deduplication while the rooted unlink runs.
+/// On unlink failure the transaction rolls back, leaving both row and file for
+/// the next startup/periodic/manual reconciliation pass. If commit fails after
+/// unlink, the restored row points to a missing unreferenced file and the next
+/// pass safely finishes the metadata deletion.
+pub(crate) async fn reconcile_orphan_blobs(
+    state: &AppState,
+    account_filter: Option<Uuid>,
+) -> Result<OrphanBlobReconcileReport, AppError> {
+    let blob_ids: Vec<Uuid> = sqlx::query_scalar(
+        r#"
+        SELECT b.id FROM blobs b
+        WHERE (?1 IS NULL OR b.account_id = ?1)
+          AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.blob_id = b.id)
+          AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.commit_blob_id = b.id)
+        ORDER BY b.created_at, b.id
+        "#,
+    )
+    .bind(account_filter)
+    .fetch_all(&state.pool)
+    .await?;
+    let mut report = OrphanBlobReconcileReport::default();
+    for blob_id in blob_ids {
+        let mut transaction = state.pool.begin().await?;
+        let orphan: Option<(Uuid, String)> = sqlx::query_as(
+            r#"
+            DELETE FROM blobs
+            WHERE id = ?
+              AND NOT EXISTS (SELECT 1 FROM resources r WHERE r.blob_id = blobs.id)
+              AND NOT EXISTS (SELECT 1 FROM uploads u WHERE u.commit_blob_id = blobs.id)
+            RETURNING account_id, storage_path
+            "#,
+        )
+        .bind(blob_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let Some((account_id, object_path)) = orphan else {
+            transaction.rollback().await?;
+            continue;
+        };
+        let account_path: String =
+            sqlx::query_scalar("SELECT storage_path FROM accounts WHERE id = ?")
+                .bind(account_id)
+                .fetch_one(&mut *transaction)
+                .await?;
+        match state.storage.remove_blob(&account_path, &object_path).await {
+            Ok(()) => {
+                transaction.commit().await?;
+                report.removed = report.removed.saturating_add(1);
+            }
+            Err(error) => {
+                transaction.rollback().await?;
+                report.errors = report.errors.saturating_add(1);
+                tracing::warn!(
+                    blob_id = %blob_id,
+                    account_id = %account_id,
+                    ?error,
+                    "orphan blob reclamation will be retried"
+                );
+            }
+        }
+    }
+    Ok(report)
+}
+
+pub async fn list_albums(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<Vec<AlbumRecord>>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT a.id, a.source_album_id, a.name,
+               COUNT(visible.id) AS asset_count,
+               (CAST(strftime('%s', a.updated_at) AS INTEGER) * 1000) AS updated_at_ms
+        FROM albums a LEFT JOIN album_assets aa ON aa.album_id = a.id
+        LEFT JOIN assets visible ON visible.id = aa.asset_id
+          AND visible.deleted_at IS NULL
+          AND EXISTS (SELECT 1 FROM resources r WHERE r.asset_id = visible.id)
+        WHERE a.account_id = ?
+        GROUP BY a.id ORDER BY a.updated_at DESC
+        "#,
+    )
+    .bind(auth.account_id)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(Json(rows.into_iter().map(album_from_row).collect()))
+}
+
+pub async fn sync_album(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractJson(request): ContractJson<SyncAlbumRequest>,
+) -> Result<Json<AlbumRecord>, AppError> {
+    validate_name(&request.source_album_id, &request.name)?;
+    if request.source_asset_ids.len() > 10_000 {
+        return Err(AppError::bad_request(
+            "album contains too many assets in one request",
+        ));
+    }
+    let mut transaction = state.pool.begin().await?;
+    let album_id: Uuid = sqlx::query_scalar(
+        r#"
+        INSERT INTO albums(
+            id, account_id, device_id, source_album_id, name, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(account_id, device_id, source_album_id) DO UPDATE SET
+            name = excluded.name,
+            updated_at = datetime('now')
+        RETURNING id
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(auth.account_id)
+    .bind(auth.device_id)
+    .bind(&request.source_album_id)
+    .bind(&request.name)
+    .fetch_one(&mut *transaction)
+    .await?;
+    if request.replace_members {
+        sqlx::query("DELETE FROM album_assets WHERE album_id = ?")
+            .bind(album_id)
+            .execute(&mut *transaction)
+            .await?;
+    }
+    for source_asset_id in &request.source_asset_ids {
+        let asset_id: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM assets \
+             WHERE account_id = ? AND device_id = ? AND source_asset_id = ?",
+        )
+        .bind(auth.account_id)
+        .bind(auth.device_id)
+        .bind(source_asset_id)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if let Some(asset_id) = asset_id {
+            sqlx::query(
+                "INSERT INTO album_assets(album_id, asset_id, added_at) \
+                 VALUES(?, ?, datetime('now')) \
+                 ON CONFLICT(album_id, asset_id) DO NOTHING",
+            )
+            .bind(album_id)
+            .bind(asset_id)
+            .execute(&mut *transaction)
+            .await?;
+        }
+    }
+    audit::record_change(
+        &mut transaction,
+        auth.account_id,
+        "album",
+        album_id,
+        "upsert",
+    )
+    .await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        &auth,
+        "album.sync",
+        Some("album"),
+        Some(album_id),
+    )
+    .await?;
+    transaction.commit().await?;
+    let row = sqlx::query(
+        r#"
+        SELECT a.id, a.source_album_id, a.name,
+               COUNT(visible.id) AS asset_count,
+               (CAST(strftime('%s', a.updated_at) AS INTEGER) * 1000) AS updated_at_ms
+        FROM albums a LEFT JOIN album_assets aa ON aa.album_id = a.id
+        LEFT JOIN assets visible ON visible.id = aa.asset_id
+          AND visible.deleted_at IS NULL
+          AND EXISTS (SELECT 1 FROM resources r WHERE r.asset_id = visible.id)
+        WHERE a.id = ? AND a.account_id = ? GROUP BY a.id
+        "#,
+    )
+    .bind(album_id)
+    .bind(auth.account_id)
+    .fetch_one(&state.pool)
+    .await?;
+    Ok(Json(album_from_row(row)))
+}
+
+pub async fn list_tags(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<Vec<TagRecord>>, AppError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT t.id, t.name, COUNT(visible.id) AS asset_count,
+               (CAST(strftime('%s', t.updated_at) AS INTEGER) * 1000) AS updated_at_ms
+        FROM tags t LEFT JOIN tag_assets ta ON ta.tag_id = t.id
+        LEFT JOIN assets visible ON visible.id = ta.asset_id
+          AND visible.deleted_at IS NULL
+          AND EXISTS (SELECT 1 FROM resources r WHERE r.asset_id = visible.id)
+        WHERE t.account_id = ? GROUP BY t.id ORDER BY t.updated_at DESC
+        "#,
+    )
+    .bind(auth.account_id)
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(Json(rows.into_iter().map(tag_from_row).collect()))
+}
+
+pub async fn create_tag(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractJson(request): ContractJson<CreateTagRequest>,
+) -> Result<(StatusCode, Json<TagRecord>), AppError> {
+    validate_name("tag", &request.name)?;
+    let mut transaction = state.pool.begin().await?;
+    let row = sqlx::query(
+        r#"
+        INSERT INTO tags(id, account_id, name, created_at, updated_at)
+        VALUES (?, ?, ?, datetime('now'), datetime('now'))
+        RETURNING id, name, 0 AS asset_count,
+                  (CAST(strftime('%s', updated_at) AS INTEGER) * 1000) AS updated_at_ms
+        "#,
+    )
+    .bind(Uuid::new_v4())
+    .bind(auth.account_id)
+    .bind(request.name)
+    .fetch_one(&mut *transaction)
+    .await?;
+    let tag = tag_from_row(row);
+    audit::record_change(
+        &mut transaction,
+        auth.account_id,
+        "tag",
+        tag.tag_id,
+        "upsert",
+    )
+    .await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        &auth,
+        "tag.create",
+        Some("tag"),
+        Some(tag.tag_id),
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok((StatusCode::CREATED, Json(tag)))
+}
+
+pub async fn set_tag_assets(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath(tag_id): ContractPath<Uuid>,
+    ContractJson(request): ContractJson<SetTagAssetsRequest>,
+) -> Result<StatusCode, AppError> {
+    if request.asset_ids.len() > 10_000 {
+        return Err(AppError::bad_request("too many tag assets in one request"));
+    }
+    let mut transaction = state.pool.begin().await?;
+    let exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tags WHERE id = ? AND account_id = ?)")
+            .bind(tag_id)
+            .bind(auth.account_id)
+            .fetch_one(&mut *transaction)
+            .await?;
+    if !exists {
+        return Err(AppError::not_found("tag not found"));
+    }
+    let mut affected: std::collections::HashSet<Uuid> =
+        sqlx::query_scalar("SELECT asset_id FROM tag_assets WHERE tag_id = ?")
+            .bind(tag_id)
+            .fetch_all(&mut *transaction)
+            .await?
+            .into_iter()
+            .collect();
+    sqlx::query("DELETE FROM tag_assets WHERE tag_id = ?")
+        .bind(tag_id)
+        .execute(&mut *transaction)
+        .await?;
+    for asset_id in &request.asset_ids {
+        let exists: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM assets WHERE account_id = ? AND id = ?)",
+        )
+        .bind(auth.account_id)
+        .bind(asset_id)
+        .fetch_one(&mut *transaction)
+        .await?;
+        if exists {
+            affected.insert(*asset_id);
+            sqlx::query(
+                "INSERT INTO tag_assets(tag_id, asset_id, added_at) \
+                 VALUES(?, ?, datetime('now')) \
+                 ON CONFLICT(tag_id, asset_id) DO NOTHING",
+            )
+            .bind(tag_id)
+            .bind(asset_id)
+            .execute(&mut *transaction)
+            .await?;
+        }
+    }
+    for asset_id in affected {
+        audit::record_change(
+            &mut transaction,
+            auth.account_id,
+            "asset",
+            asset_id,
+            "upsert",
+        )
+        .await?;
+    }
+    audit::record_change(&mut transaction, auth.account_id, "tag", tag_id, "upsert").await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        &auth,
+        "tag.assets.set",
+        Some("tag"),
+        Some(tag_id),
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn add_tag_asset(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath((tag_id, asset_id)): ContractPath<(Uuid, Uuid)>,
+    ContractJson(_request): ContractJson<EmptyRequest>,
+) -> Result<StatusCode, AppError> {
+    change_tag_asset(&state, &auth, tag_id, asset_id, true).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn remove_tag_asset(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractPath((tag_id, asset_id)): ContractPath<(Uuid, Uuid)>,
+    ContractJson(_request): ContractJson<EmptyRequest>,
+) -> Result<StatusCode, AppError> {
+    change_tag_asset(&state, &auth, tag_id, asset_id, false).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn change_tag_asset(
+    state: &AppState,
+    auth: &AuthContext,
+    tag_id: Uuid,
+    asset_id: Uuid,
+    add: bool,
+) -> Result<(), AppError> {
+    let mut transaction = state.pool.begin().await?;
+    let valid: bool = sqlx::query_scalar(
+        r#"
+        SELECT EXISTS(
+            SELECT 1 FROM tags t, assets a
+            WHERE t.id = ?1 AND t.account_id = ?2
+              AND a.id = ?3 AND a.account_id = ?2
+        )
+        "#,
+    )
+    .bind(tag_id)
+    .bind(auth.account_id)
+    .bind(asset_id)
+    .fetch_one(&mut *transaction)
+    .await?;
+    if !valid {
+        return Err(AppError::not_found("tag or asset not found"));
+    }
+    if add {
+        sqlx::query(
+            "INSERT INTO tag_assets(tag_id, asset_id, added_at) \
+             VALUES (?, ?, datetime('now')) ON CONFLICT DO NOTHING",
+        )
+        .bind(tag_id)
+        .bind(asset_id)
+        .execute(&mut *transaction)
+        .await?;
+    } else {
+        sqlx::query("DELETE FROM tag_assets WHERE tag_id = ? AND asset_id = ?")
+            .bind(tag_id)
+            .bind(asset_id)
+            .execute(&mut *transaction)
+            .await?;
+    }
+    audit::record_change(
+        &mut transaction,
+        auth.account_id,
+        "asset",
+        asset_id,
+        "upsert",
+    )
+    .await?;
+    audit::record_in_transaction(
+        &mut transaction,
+        auth,
+        if add {
+            "tag.asset.add"
+        } else {
+            "tag.asset.remove"
+        },
+        Some("asset"),
+        Some(asset_id),
+    )
+    .await?;
+    transaction.commit().await?;
+    Ok(())
+}
+
+pub async fn duplicate_groups(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractQuery(query): ContractQuery<DuplicateQuery>,
+) -> Result<Json<Vec<DuplicateGroup>>, AppError> {
+    let limit = query.limit.unwrap_or(50).clamp(1, 200) as i64;
+    let rows = sqlx::query(
+        r#"
+        SELECT b.id AS blob_id, b.content_blake3, b.plaintext_size,
+               COUNT(DISTINCT a.id) AS asset_count
+        FROM blobs b
+        JOIN resources r ON r.blob_id = b.id
+        JOIN assets a ON a.id = r.asset_id
+        WHERE b.account_id = ? AND a.deleted_at IS NULL AND r.role = 'primary'
+        GROUP BY b.id, b.content_blake3, b.plaintext_size
+        HAVING COUNT(DISTINCT a.id) > 1
+        ORDER BY COUNT(DISTINCT a.id) DESC, b.created_at
+        LIMIT ?
+        "#,
+    )
+    .bind(auth.account_id)
+    .bind(limit)
+    .fetch_all(&state.pool)
+    .await?;
+    let mut groups = Vec::with_capacity(rows.len());
+    for row in rows {
+        let blob_id: Uuid = row.get("blob_id");
+        let ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT a.id FROM assets a \
+             JOIN resources r ON r.asset_id = a.id \
+             WHERE r.blob_id = ? AND a.deleted_at IS NULL AND r.role = 'primary' \
+             ORDER BY a.created_at",
+        )
+        .bind(blob_id)
+        .fetch_all(&state.pool)
+        .await?;
+        let mut assets = Vec::with_capacity(ids.len());
+        for asset_id in ids {
+            assets.push(load_asset_summary(&state.pool, auth.account_id, asset_id).await?);
+        }
+        groups.push(DuplicateGroup {
+            content_blake3: row.get("content_blake3"),
+            content_size: row.get::<i64, _>("plaintext_size") as u64,
+            assets,
+        });
+    }
+    Ok(Json(groups))
+}
+
+pub(crate) async fn load_asset_summary(
+    pool: &SqlitePool,
+    account_id: Uuid,
+    asset_id: Uuid,
+) -> Result<AssetSummary, AppError> {
+    let mut tx = pool.begin().await?;
+    let value = load_asset_summaries(&mut tx, account_id, &[asset_id])
+        .await?
+        .pop()
+        .ok_or_else(|| AppError::not_found("asset not found"))?;
+    tx.commit().await?;
+    Ok(value)
+}
+
+/// A page always needs three bulk reads, regardless of asset count; callers hold a read snapshot.
+async fn load_asset_summaries(
+    connection: &mut SqliteConnection,
+    account: Uuid,
+    ids: &[Uuid],
+) -> Result<Vec<AssetSummary>, AppError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    fn selected(sql: &'static str, account: Uuid, ids: &[Uuid]) -> QueryBuilder<Sqlite> {
+        let mut q = QueryBuilder::new(sql);
+        q.push_bind(account).push(" AND a.id IN (");
+        let mut values = q.separated(",");
+        for id in ids {
+            values.push_bind(*id);
+        }
+        values.push_unseparated(")");
+        q
+    }
+    let mut asset_query = selected("SELECT a.id,a.source_asset_id,a.media_kind,a.source_created_at_ms,a.favorite,a.archived,
+        CASE WHEN a.deleted_at IS NULL THEN NULL ELSE CAST(strftime('%s',a.deleted_at) AS INTEGER)*1000 END AS trashed_at_ms
+        FROM assets a WHERE a.account_id=", account, ids);
+    asset_query.push(" AND EXISTS (SELECT 1 FROM resources r WHERE r.asset_id = a.id)");
+    let rows = asset_query.build().fetch_all(&mut *connection).await?;
+    let mut resource_query = selected("SELECT r.asset_id,r.id,r.role,r.filename,r.mime_type,r.metadata,b.plaintext_size
+        FROM resources r JOIN blobs b ON b.id=r.blob_id JOIN assets a ON a.id=r.asset_id WHERE a.account_id=", account, ids);
+    resource_query.push(" ORDER BY r.created_at,r.id");
+    let resources = resource_query.build().fetch_all(&mut *connection).await?;
+    let mut resource_map: HashMap<Uuid, Vec<ResourceSummary>> = HashMap::new();
+    for r in resources {
+        let id: Uuid = r.get("id");
+        resource_map
+            .entry(r.get("asset_id"))
+            .or_default()
+            .push(ResourceSummary {
+                resource_id: id,
+                role: r.get("role"),
+                filename: r.get("filename"),
+                mime_type: r.get("mime_type"),
+                content_size: r.get::<i64, _>("plaintext_size") as u64,
+                storage_encoding: StorageEncoding::PlainV1,
+                metadata: r.get("metadata"),
+                manifest_path: format!("{API_BASE_PATH}/resources/{id}"),
+                content_path: format!("{API_BASE_PATH}/resources/{id}/content"),
+            });
+    }
+    let mut tag_query = selected(
+        "SELECT ta.asset_id,t.name FROM tags t JOIN tag_assets ta ON ta.tag_id=t.id
+        JOIN assets a ON a.id=ta.asset_id WHERE a.account_id=",
+        account,
+        ids,
+    );
+    tag_query.push(" ORDER BY lower(t.name),t.id");
+    let tags = tag_query.build().fetch_all(&mut *connection).await?;
+    let mut tag_map: HashMap<Uuid, Vec<String>> = HashMap::new();
+    for r in tags {
+        tag_map
+            .entry(r.get("asset_id"))
+            .or_default()
+            .push(r.get("name"));
+    }
+    let mut assets: HashMap<Uuid, AssetSummary> = rows
+        .into_iter()
+        .map(|r| {
+            let id: Uuid = r.get("id");
+            (
+                id,
+                AssetSummary {
+                    asset_id: id,
+                    source_asset_id: r.get("source_asset_id"),
+                    media_kind: parse_media_kind(r.get("media_kind")),
+                    source_created_at_ms: r.get("source_created_at_ms"),
+                    favorite: r.get("favorite"),
+                    archived: r.get("archived"),
+                    trashed_at_ms: r.get("trashed_at_ms"),
+                    resources: resource_map.remove(&id).unwrap_or_default(),
+                    tag_names: tag_map.remove(&id).unwrap_or_default(),
+                },
+            )
+        })
+        .collect();
+    Ok(ids.iter().filter_map(|id| assets.remove(id)).collect())
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotQuery {
+    cursor: Option<Uuid>,
+    limit: Option<u32>,
+}
+
+/// Capture this watermark BEFORE walking snapshot pages. Replaying all later events repairs
+/// inserts/deletes concurrent with the walk; UUID ordering is independent of edited dates.
+pub async fn sync_head(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let sequence: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(MAX(sequence),0) FROM account_changes WHERE account_id=?",
+    )
+    .bind(auth.account_id)
+    .fetch_one(&state.pool)
+    .await?;
+    Ok(Json(
+        serde_json::json!({"sequence":sequence,"snapshot_protocol":"watermark-before-uuid-walk-v1"}),
+    ))
+}
+
+pub async fn snapshot(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+    ContractQuery(query): ContractQuery<SnapshotQuery>,
+) -> Result<Json<TimelinePage>, AppError> {
+    let limit = query.limit.unwrap_or(100).clamp(1, 250) as usize;
+    let mut tx = state.pool.begin().await?;
+    let ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT id FROM assets WHERE account_id=? AND EXISTS (SELECT 1 FROM resources r WHERE r.asset_id = assets.id) AND (? IS NULL OR id>?) ORDER BY id LIMIT ?",
+    )
+    .bind(auth.account_id)
+    .bind(query.cursor)
+    .bind(query.cursor)
+    .bind((limit + 1) as i64)
+    .fetch_all(&mut *tx)
+    .await?;
+    let next_cursor = (ids.len() > limit).then(|| ids[limit - 1].to_string());
+    let items =
+        load_asset_summaries(&mut tx, auth.account_id, &ids[..ids.len().min(limit)]).await?;
+    tx.commit().await?;
+    Ok(Json(TimelinePage { items, next_cursor }))
+}
+
+pub async fn devices(
+    State(state): State<AppState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let rows =
+        sqlx::query("SELECT id,name,platform FROM devices WHERE account_id=? ORDER BY name,id")
+            .bind(auth.account_id)
+            .fetch_all(&state.pool)
+            .await?;
+    Ok(Json(serde_json::Value::Array(rows.into_iter().map(|r| serde_json::json!({"device_id":r.get::<Uuid,_>("id"),"name":r.get::<String,_>("name"),"platform":r.get::<String,_>("platform")})).collect())))
+}
+
+fn parse_media_kind(value: String) -> MediaKind {
+    match value.as_str() {
+        "photo" => MediaKind::Photo,
+        "video" => MediaKind::Video,
+        _ => MediaKind::Other,
+    }
+}
+
+fn album_from_row(row: sqlx::sqlite::SqliteRow) -> AlbumRecord {
+    AlbumRecord {
+        album_id: row.get("id"),
+        source_album_id: row.get("source_album_id"),
+        name: row.get("name"),
+        asset_count: row.get::<i64, _>("asset_count") as u64,
+        updated_at_ms: row.get("updated_at_ms"),
+    }
+}
+
+fn tag_from_row(row: sqlx::sqlite::SqliteRow) -> TagRecord {
+    TagRecord {
+        tag_id: row.get("id"),
+        name: row.get("name"),
+        asset_count: row.get::<i64, _>("asset_count") as u64,
+        updated_at_ms: row.get("updated_at_ms"),
+    }
+}
+
+fn validate_name(source_id: &str, name: &str) -> Result<(), AppError> {
+    if source_id.trim().is_empty()
+        || source_id.len() > 1024
+        || name.trim().is_empty()
+        || name.len() > 512
+    {
+        return Err(AppError::bad_request("invalid name"));
+    }
+    Ok(())
+}
+
+fn encode_cursor(cursor: &TimelineCursor) -> String {
+    URL_SAFE_NO_PAD.encode(serde_json::to_vec(cursor).expect("timeline cursor is serializable"))
+}
+
+fn decode_cursor(value: &str) -> Result<TimelineCursor, AppError> {
+    let bytes = URL_SAFE_NO_PAD
+        .decode(value)
+        .map_err(|_| AppError::bad_request("invalid timeline cursor"))?;
+    serde_json::from_slice(&bytes).map_err(|_| AppError::bad_request("invalid timeline cursor"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeline_cursor_round_trips() {
+        let value = TimelineCursor {
+            created_at_ms: 1_725_000_000_000,
+            asset_id: Uuid::new_v4(),
+        };
+        assert_eq!(
+            decode_cursor(&encode_cursor(&value)).unwrap().asset_id,
+            value.asset_id
+        );
+    }
+
+    #[test]
+    fn timeline_cursor_rejects_invalid_input() {
+        assert!(decode_cursor("not-a-cursor").is_err());
+    }
+}

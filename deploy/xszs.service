@@ -1,0 +1,41 @@
+[Unit]
+Description=Media Backup server
+Wants=network-online.target
+After=network-online.target
+ConditionArchitecture=x86-64
+
+[Service]
+Type=simple
+User=ixcss-media
+Group=ixcss-media
+UMask=0077
+WorkingDirectory=/var/lib/isarmg/xszs
+EnvironmentFile=/etc/isarmg/xszs.env
+ExecStart=/opt/isarmg/xszs/current/bin/xszs run --release-root /opt/isarmg/xszs/current
+Restart=on-failure
+RestartSec=3s
+StateDirectory=isarmg/xszs
+StateDirectoryMode=0700
+RuntimeDirectory=isarmg/xszs
+RuntimeDirectoryMode=0700
+ReadWritePaths=/var/lib/isarmg/xszs /run/isarmg/xszs
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

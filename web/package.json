@@ -1,0 +1,40 @@
+{
+  "name": "xszs-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=26.7.0 <27"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "node --test tests/display-labels.test.mjs",
+    "check:foundation": "node tests/foundation-baseline.test.mjs",
+    "build": "npm run check:foundation && npm run typecheck && vite build",
+    "test:browser": "npm run build && node tests/browser-acceptance.mjs",
+    "build:server": "xcss-build-server --config ../foundation-web-build.json --mode development"
+  },
+  "dependencies": {
+    "@xcss/admin-web": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-admin-web-1.0.0.tgz",
+    "@xcss/admin-shell": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-admin-shell-1.0.0.tgz",
+    "@xcss/admin-ui": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-admin-ui-1.0.0.tgz",
+    "@xcss/contracts": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-contracts-1.0.0.tgz",
+    "@xcss/design-tokens": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-design-tokens-1.0.0.tgz",
+    "@xcss/http-client": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-http-client-1.0.0.tgz",
+    "@xcss/web-fonts": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-web-fonts-1.0.0.tgz",
+    "@xcss/web-toolchain": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-web-toolchain-1.0.0.tgz",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.3"
+  }
+}

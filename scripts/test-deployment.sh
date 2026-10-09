@@ -1,0 +1,625 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly archive_arg="${1:-${XSZS_RELEASE_ARCHIVE:-}}"
+readonly package="xszs-1.0.0-x86_64-unknown-linux-gnu"
+readonly version="1.0.0"
+project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+readonly project_dir
+
+test_root=""
+server_pid=""
+
+fail() {
+  printf 'deployment test failed: %s\n' "$*" >&2
+  exit 1
+}
+
+cleanup() {
+  if [[ -n "$server_pid" ]]; then
+    kill -TERM "$server_pid" 2>/dev/null || true
+    wait "$server_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$test_root" && -d "$test_root" && ! -L "$test_root" ]]; then
+    chmod -R u+rwX "$test_root" 2>/dev/null || true
+    rm -rf -- "$test_root"
+  fi
+}
+trap cleanup EXIT
+
+[[ -n "$archive_arg" ]] ||
+  fail "usage: test-deployment.sh /absolute/path/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz"
+[[ "$archive_arg" = /* && -f "$archive_arg" && ! -L "$archive_arg" ]] ||
+  fail "release archive must be an absolute regular non-symlink file"
+[[ "$(stat -c '%h' -- "$archive_arg")" == "1" ]] || fail "release archive has a hard-link alias"
+archive="$(cd "$(dirname "$archive_arg")" && pwd -P)/$(basename "$archive_arg")"
+[[ "$(basename "$archive")" == "$package.tar.gz" ]] || fail "unexpected release archive name"
+
+test_root="$(mktemp -d)"
+extract_dir="$test_root/extracted"
+mkdir -m 0755 "$extract_dir"
+if tar -tzf "$archive" | awk -F/ -v package="$package" '
+  $1 != package || $0 ~ /(^|\/)\.\.?(\/|$)/ || $0 ~ /^\// { exit 1 }
+'; then
+  :
+else
+  fail "archive contains an unexpected root or non-normal path"
+fi
+tar --no-same-owner -xzf "$archive" -C "$extract_dir"
+relocated_releases="$test_root/relocated/opt/isarmg/xszs/releases"
+mkdir -p "$relocated_releases"
+release_root="$relocated_releases/$version"
+mv -T -- "$extract_dir/$package" "$release_root"
+real_binary="$release_root/bin/xszs"
+setup_script="$release_root/scripts/setup-wsl.sh"
+unit_source="$release_root/systemd/xszs.service"
+[[ -d "$release_root" && ! -L "$release_root" && -x "$real_binary" ]] ||
+  fail "archive does not contain the real server layout"
+
+identity_file="$test_root/identity.json"
+env -i PATH="$PATH" "$real_binary" release-identity >"$identity_file"
+python3 - "$identity_file" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+
+identity = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+expected_keys = {
+    "product", "version", "source_revision", "target", "api_version",
+    "storage_encoding", "server_schema_revision", "server_schema_sha256",
+    "web_assets_sha256",
+    "release_contract_sha256",
+}
+assert isinstance(identity, dict) and set(identity) == expected_keys
+assert identity["product"] == "xszs"
+assert identity["version"] == "1.0.0"
+assert re.fullmatch(r"[0-9a-f]{40}", identity["source_revision"])
+assert identity["target"] == "x86_64-unknown-linux-gnu"
+assert identity["api_version"] == "v1"
+assert identity["storage_encoding"] == "plain-v1"
+assert identity["server_schema_revision"] == 1
+assert identity["server_schema_sha256"] == "5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f"
+PY
+contract="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_contract_sha256"])' "$identity_file")"
+source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
+verification="$($real_binary release-verify "$release_root")"
+[[ "$verification" == XSZS_RELEASE_VERIFIED_V1$'\txszs\t'"$version"$'\t'"$source_revision"$'\tx86_64-unknown-linux-gnu\t'"$contract" ]] ||
+  fail "real binary did not verify the extracted archive identity"
+archive_digest="$(sha256sum "$archive" | awk '{print $1}')"
+if "$project_dir/scripts/build-server-release.sh" "$real_binary" "$source_revision" \
+  "$(dirname "$archive")" >/dev/null 2>&1; then
+  fail "release builder reused an existing archive path"
+fi
+[[ "$(sha256sum "$archive" | awk '{print $1}')" == "$archive_digest" ]] ||
+  fail "release builder changed an existing archive"
+"$real_binary" web-assets >"$test_root/compiled-web-assets.json"
+cmp --silent "$test_root/compiled-web-assets.json" "$release_root/share/web-assets.json" ||
+  fail "release inventory differs from the actual executable"
+python3 - "$release_root/share/web-assets.json" "$identity_file" <<'PYWEB'
+import hashlib,json,sys
+from pathlib import Path
+raw=Path(sys.argv[1]).read_bytes(); manifest=json.loads(raw); identity=json.load(open(sys.argv[2]))
+assert hashlib.sha256(raw).hexdigest()==identity['web_assets_sha256']
+assert manifest['format']=='xcss-web-assets-v1'
+paths=[entry['path'] for entry in manifest['files']]
+assert paths==sorted(set(paths))
+assert {'index.html','assets/admin.js','assets/admin.css','assets/MapleMono-OFL.txt','assets/CJK-LICENSE.txt'}<=set(paths)
+assert any(path.endswith('.woff2') for path in paths)
+PYWEB
+python3 - "$release_root" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+readme = (root / "README.md").read_text(encoding="utf-8")
+references = set(re.findall(r"scripts/[A-Za-z0-9._-]+\.sh", readme))
+assert references
+for reference in references:
+    assert (root / reference).is_file(), f"release README references missing {reference}"
+PY
+
+# Every rejected release startup must fail before it creates SQLite, storage, or
+# adjacent runtime-lock state.
+expect_start_rejected() {
+  local label="$1"
+  local executable="$2"
+  shift 2
+  local rejected_state="$test_root/start-rejected-$label"
+  local log="$test_root/start-rejected-$label.log"
+  local status
+  mkdir -m 0755 "$rejected_state" "$rejected_state/db" "$rejected_state/data"
+  set +e
+  (
+    cd /
+    timeout 5s env \
+      DATABASE_URL="sqlite://$rejected_state/db/app.db" \
+      DATA_DIR="$rejected_state/data" \
+      BIND=127.0.0.1:0 \
+      BOOTSTRAP_ADMIN_USERNAME=admin \
+      BOOTSTRAP_ADMIN_PASSWORD=deployment-rejection-password \
+      XSZS_CREDENTIALS_KEY=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc= \
+      REQUIRE_HTTPS=false \
+      DEVELOPMENT=true \
+      TRUSTED_PROXY_CIDRS= \
+      RUST_LOG=warn \
+      "$executable" "$@"
+  ) >"$log" 2>&1
+  status="$?"
+  set -e
+  [[ "$status" -ne 0 && "$status" -ne 124 ]] || fail "$label did not fail closed before serving"
+  [[ -z "$(find "$rejected_state/db" "$rejected_state/data" -mindepth 1 -print -quit)" ]] ||
+    fail "$label wrote application or lock state before rejection"
+}
+
+expect_start_rejected ordinary-serve "$real_binary" serve
+expect_start_rejected implicit-serve "$real_binary"
+expect_start_rejected non-normal-root "$real_binary" run --release-root "$release_root/../$version"
+
+wrong_layout_root="$test_root/wrong-layout/$version"
+mkdir -p "$(dirname "$wrong_layout_root")"
+cp -a -- "$release_root" "$wrong_layout_root"
+expect_start_rejected wrong-layout-root \
+  "$wrong_layout_root/bin/xszs" run --release-root "$wrong_layout_root"
+
+outside_binary="$test_root/copied-xszs"
+cp -- "$real_binary" "$outside_binary"
+chmod 0755 "$outside_binary"
+expect_start_rejected copied-binary "$outside_binary" run --release-root "$release_root"
+
+alias_parent="$test_root/alias/opt/isarmg/xszs/releases"
+mkdir -p "$alias_parent"
+ln -s "$release_root" "$alias_parent/$version"
+expect_start_rejected symlink-root "$real_binary" run --release-root "$alias_parent/$version"
+
+current_alias="$test_root/mutable-alias/opt/isarmg/xszs/current"
+mkdir -p "$(dirname "$current_alias")"
+ln -s "$release_root" "$current_alias"
+expect_start_rejected current-alias "$real_binary" run --release-root "$current_alias"
+
+tampered_runtime="$test_root/tampered-runtime/opt/isarmg/xszs/releases/$version"
+mkdir -p "$(dirname "$tampered_runtime")"
+cp -a -- "$release_root" "$tampered_runtime"
+printf '\ntampered\n' >>"$tampered_runtime/README.md"
+expect_start_rejected tampered-runtime \
+  "$tampered_runtime/bin/xszs" run --release-root "$tampered_runtime"
+
+extra_runtime="$test_root/extra-runtime/opt/isarmg/xszs/releases/$version"
+mkdir -p "$(dirname "$extra_runtime")"
+cp -a -- "$release_root" "$extra_runtime"
+touch "$extra_runtime/EXTRA"
+chmod 0644 "$extra_runtime/EXTRA"
+expect_start_rejected extra-runtime \
+  "$extra_runtime/bin/xszs" run --release-root "$extra_runtime"
+
+# Run the physically relocated binary from / against real SQLite and real HTTP.
+# The same process verifies its root before it reads application configuration.
+smoke_root="$test_root/smoke"
+mkdir -m 0700 "$smoke_root" "$smoke_root/db" "$smoke_root/data"
+smoke_port="$((20000 + BASHPID % 30000))"
+env DATABASE_URL="sqlite://$smoke_root/db/app.db" DATA_DIR="$smoke_root/data" \
+  BIND="127.0.0.1:$smoke_port" BOOTSTRAP_ADMIN_USERNAME=admin \
+  BOOTSTRAP_ADMIN_PASSWORD=deployment-smoke-password \
+  XSZS_CREDENTIALS_KEY=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc= \
+  REQUIRE_HTTPS=false DEVELOPMENT=true TRUSTED_PROXY_CIDRS= \
+  "$real_binary" init --json
+(
+  cd /
+  exec env \
+    DATABASE_URL="sqlite://$smoke_root/db/app.db" \
+    DATA_DIR="$smoke_root/data" \
+    BIND="127.0.0.1:$smoke_port" \
+    BOOTSTRAP_ADMIN_USERNAME=admin \
+    BOOTSTRAP_ADMIN_PASSWORD=deployment-smoke-password \
+    XSZS_CREDENTIALS_KEY=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc= \
+    REQUIRE_HTTPS=false \
+    DEVELOPMENT=true \
+    TRUSTED_PROXY_CIDRS= \
+    RUST_LOG=warn \
+    "$real_binary" run --release-root "$release_root"
+) >"$test_root/server.log" 2>&1 &
+server_pid="$!"
+smoke_ready=0
+for _ in {1..120}; do
+  if curl --silent --fail "http://127.0.0.1:$smoke_port/healthz" >/dev/null; then
+    smoke_ready=1
+    break
+  fi
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    cat "$test_root/server.log" >&2
+    fail "real release binary exited during HTTP smoke"
+  fi
+  sleep 0.1
+done
+[[ "$smoke_ready" == "1" ]] || {
+  cat "$test_root/server.log" >&2
+  fail "real release binary did not become healthy"
+}
+[[ "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:$smoke_port/admin")" == "200" ]] ||
+  fail "real release binary did not serve its embedded admin web"
+python3 - "$release_root/share/web-assets.json" "http://127.0.0.1:$smoke_port/admin" <<'PYHTTP'
+import hashlib,json,sys,urllib.request,urllib.error
+inventory=json.load(open(sys.argv[1]))
+for asset in inventory['files']:
+    url=sys.argv[2]+'/'+asset['path'] if asset['path']!='index.html' else sys.argv[2]
+    with urllib.request.urlopen(url) as response:
+        body=response.read()
+        assert len(body)==asset['size'] and hashlib.sha256(body).hexdigest()==asset['sha256'],asset['path']
+        assert response.headers['content-type']==asset['content_type'],asset['path']
+        assert response.headers['x-content-type-options']=='nosniff'
+        etag=response.headers['etag']
+        if asset['path']=='index.html':
+            assert 'no-store' in response.headers['cache-control']
+            assert "script-src 'self'" in response.headers['content-security-policy']
+    with urllib.request.urlopen(urllib.request.Request(url,method='HEAD')) as response:
+        assert not response.read() and int(response.headers['content-length'])==asset['size']
+    if not asset['path'].endswith('.html'):
+        try: urllib.request.urlopen(urllib.request.Request(url,headers={'If-None-Match':etag}))
+        except urllib.error.HTTPError as error: assert error.code==304 and not error.read()
+        else: raise AssertionError('no 304 response for '+asset['path'])
+try: urllib.request.urlopen(sys.argv[2]+'/assets/missing-resource.js')
+except urllib.error.HTTPError as error: assert error.code==404
+else: raise AssertionError('missing asset not 404')
+PYHTTP
+kill -TERM "$server_pid"
+wait "$server_pid" || true
+server_pid=""
+[[ -f "$smoke_root/db/app.db" ]] || fail "real release smoke did not create SQLite state"
+
+assert_unit_setting() {
+  grep -Fqx "$1" "$unit_source" || fail "missing unit setting: $1"
+}
+
+expect_invalid_source() {
+  local label="$1"
+  local candidate="$2"
+  local rejected_root="$test_root/rejected-$label"
+  mkdir -m 0755 "$rejected_root"
+  if "$real_binary" release-verify "$candidate" >/dev/null 2>&1; then
+    fail "$label was accepted by the trusted real verifier"
+  fi
+  if XSZS_SETUP_ROOT="$rejected_root" XSZS_SETUP_TEST=1 \
+    "$candidate/scripts/setup-wsl.sh" >/dev/null 2>&1; then
+    fail "$label was accepted by setup"
+  fi
+  [[ -z "$(find "$rejected_root" -mindepth 1 -print -quit)" ]] ||
+    fail "$label caused writes before release preflight completed"
+}
+
+negative_root="$test_root/negative"
+fresh_negative() {
+  if [[ -e "$negative_root" ]]; then
+    rm -rf -- "$negative_root"
+  fi
+  cp -a -- "$release_root" "$negative_root"
+}
+
+fresh_negative
+printf '#!/usr/bin/env bash\nexit 0\n' >"$negative_root/bin/xszs"
+chmod 0755 "$negative_root/bin/xszs"
+expect_invalid_source fake-binary "$negative_root"
+
+fresh_negative
+printf '\ntampered\n' >>"$negative_root/README.md"
+expect_invalid_source tampered-file "$negative_root"
+
+fresh_negative
+touch "$negative_root/EXTRA"
+chmod 0644 "$negative_root/EXTRA"
+expect_invalid_source extra-file "$negative_root"
+
+fresh_negative
+rm "$negative_root/share/web-assets.json"
+expect_invalid_source missing-file "$negative_root"
+
+fresh_negative
+printf '\ntampered\n' >>"$negative_root/share/web-assets.json"
+expect_invalid_source tampered-web-inventory "$negative_root"
+
+# A self-consistent replacement manifest cannot authorize bytes absent from the binary.
+fresh_negative
+printf '\ntampered\n' >>"$negative_root/share/web-assets.json"
+rm "$negative_root/release-manifest.json"
+python3 "$project_dir/scripts/write-release-manifest.py" "$negative_root" "$source_revision"
+expect_invalid_source rehashed-web-inventory "$negative_root"
+
+# Even a fully self-consistent substituted inventory and identity cannot change the executing binary's assets.
+fresh_negative
+printf '\ntampered\n' >>"$negative_root/share/web-assets.json"
+rm "$negative_root/release-manifest.json"
+python3 "$project_dir/scripts/write-release-manifest.py" "$negative_root" "$source_revision"
+python3 - "$negative_root" <<'PYFORGE'
+import hashlib,json,sys
+from pathlib import Path
+root=Path(sys.argv[1]); path=root/'release-manifest.json'; manifest=json.loads(path.read_text()); identity=manifest['identity']
+identity['web_assets_sha256']=hashlib.sha256((root/'share/web-assets.json').read_bytes()).hexdigest()
+contract=(f'product={identity["product"]}\nversion={identity["version"]}\napi_version={identity["api_version"]}\nstorage_encoding={identity["storage_encoding"]}\nserver_schema_revision={identity["server_schema_revision"]}\nserver_schema_sha256={identity["server_schema_sha256"]}\nweb_assets_sha256={identity["web_assets_sha256"]}\n')
+identity['release_contract_sha256']=hashlib.sha256(contract.encode()).hexdigest()
+path.write_text(json.dumps(manifest)+'\n')
+PYFORGE
+expect_invalid_source forged-web-identity "$negative_root"
+
+fresh_negative
+rm "$negative_root/share/web-assets.json"
+expect_invalid_source missing-web-inventory "$negative_root"
+
+fresh_negative
+chmod 0664 "$negative_root/README.md"
+expect_invalid_source writable-payload "$negative_root"
+
+fresh_negative
+chmod 4755 "$negative_root/bin/xszs"
+expect_invalid_source privileged-mode-payload "$negative_root"
+
+fresh_negative
+ln "$negative_root/README.md" "$negative_root/docs/README.alias"
+expect_invalid_source hard-linked-payload "$negative_root"
+
+fresh_negative
+rm "$negative_root/share/web-assets.json"
+ln -s /etc/passwd "$negative_root/share/web-assets.json"
+expect_invalid_source symlinked-payload "$negative_root"
+
+fresh_negative
+rm "$negative_root/share/web-assets.json"
+mkfifo "$negative_root/share/web-assets.json"
+expect_invalid_source special-payload "$negative_root"
+
+fresh_negative
+python3 - "$negative_root/release-manifest.json" version <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); value = json.loads(path.read_text())
+value["identity"][sys.argv[2]] = "9.9.9"
+path.write_text(json.dumps(value) + "\n")
+PY
+expect_invalid_source wrong-version "$negative_root"
+
+fresh_negative
+python3 - "$negative_root/release-manifest.json" product <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); value = json.loads(path.read_text())
+value["identity"][sys.argv[2]] = "not-xszs"
+path.write_text(json.dumps(value) + "\n")
+PY
+expect_invalid_source wrong-product "$negative_root"
+
+fresh_negative
+python3 - "$negative_root/release-manifest.json" top <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); value = json.loads(path.read_text())
+value["unexpected"] = True
+path.write_text(json.dumps(value) + "\n")
+PY
+expect_invalid_source unknown-top-field "$negative_root"
+
+fresh_negative
+python3 - "$negative_root/release-manifest.json" nested <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); value = json.loads(path.read_text())
+value["identity"]["unknown_alias"] = "unexpected"
+path.write_text(json.dumps(value) + "\n")
+PY
+expect_invalid_source unknown-identity-field "$negative_root"
+
+fresh_negative
+python3 - "$negative_root/release-manifest.json" file <<'PY'
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1]); value = json.loads(path.read_text())
+value["files"][0]["unknown_path"] = value["files"][0]["path"]
+path.write_text(json.dumps(value) + "\n")
+PY
+expect_invalid_source unknown-file-field "$negative_root"
+
+if XSZS_SETUP_ROOT="$test_root/alternate-without-test-mode" \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "alternate root was accepted outside test mode"
+fi
+if XSZS_SETUP_ROOT=/ XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "test mode was allowed to target the real root"
+fi
+
+install_root="$test_root/install-root"
+mkdir -m 0755 "$install_root"
+first_output="$test_root/first-output"
+XSZS_SETUP_ROOT="$install_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >"$first_output" 2>&1
+
+release_dir="$install_root/opt/isarmg/xszs/releases/$version"
+installed_binary="$release_dir/bin/xszs"
+config="$install_root/etc/isarmg/xszs.env"
+installed_unit="$install_root/etc/systemd/system/xszs.service"
+
+[[ -x "$installed_binary" && ! -L "$installed_binary" ]] || fail "real release binary was not installed"
+cmp --silent "$release_root/release-manifest.json" "$release_dir/release-manifest.json" ||
+  fail "installed immutable generation differs from the archive"
+"$installed_binary" release-verify "$release_dir" >/dev/null || fail "installed release does not verify"
+if [[ "$EUID" -eq 0 ]]; then
+  "$installed_binary" release-verify-installed "$release_dir" >/dev/null ||
+    fail "root-owned installed release does not pass the production ownership gate"
+fi
+[[ -L "$install_root/opt/isarmg/xszs/current" &&
+  "$(readlink "$install_root/opt/isarmg/xszs/current")" == "$install_root/opt/isarmg/xszs/releases/$version" ]] ||
+  fail "installer did not create the exact controlled current pointer"
+cmp --silent "$unit_source" "$installed_unit" || fail "installed unit differs from the archive"
+
+[[ -f "$config" && ! -L "$config" && "$(stat -c '%a:%h' "$config")" == "600:1" ]] ||
+  fail "configuration is not a private single-link regular file"
+grep -Fqx '# INITIAL-SECRETS-MUST-BE-REPLACED' "$config" || fail "initial-secret marker is missing"
+grep -Fqx 'DATABASE_URL=sqlite:///var/lib/isarmg/xszs/db/app.db' "$config" ||
+  fail "SQLite database path is incorrect"
+grep -Fqx 'DATA_DIR=/var/lib/isarmg/xszs/data' "$config" || fail "data path is incorrect"
+[[ -d "$install_root/var/lib/isarmg/xszs/db" &&
+  -d "$install_root/var/lib/isarmg/xszs/data" ]] || fail "separate database/data directories are missing"
+
+admin_secret="$(awk -F= '/^BOOTSTRAP_ADMIN_PASSWORD=/ { print $2 }' "$config")"
+credentials_secret="$(awk -F= '/^XSZS_CREDENTIALS_KEY=/ { print $2 }' "$config")"
+metrics_secret="$(awk -F= '/^METRICS_TOKEN=/ { print $2 }' "$config")"
+[[ "$admin_secret" =~ ^[[:xdigit:]]{64}$ && "$metrics_secret" =~ ^[[:xdigit:]]{64}$ ]] ||
+  fail "generated secrets are not 256-bit random hex"
+[[ "$(printf '%s' "$credentials_secret" | base64 --decode | wc -c)" == "32" ]] || fail "generated credentials key is not 256-bit Base64"
+[[ "$admin_secret" != "$metrics_secret" ]] || fail "independent generated secrets are equal"
+if grep -Fq "$admin_secret" "$first_output" || grep -Fq "$credentials_secret" "$first_output" || grep -Fq "$metrics_secret" "$first_output"; then
+  fail "setup output disclosed a generated secret"
+fi
+
+tree_digest() {
+  tar -C "$1" --sort=name --format=gnu -cf - . | sha256sum | awk '{print $1}'
+}
+
+installed_digest="$(tree_digest "$install_root")"
+second_output="$test_root/second-output"
+if XSZS_SETUP_ROOT="$install_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >"$second_output" 2>&1; then
+  fail "a second installation of the same physical version was accepted"
+fi
+[[ "$(tree_digest "$install_root")" == "$installed_digest" ]] ||
+  fail "rejected second installation changed installed state"
+
+occupied_release_root="$test_root/occupied-release-root"
+mkdir -p "$occupied_release_root/opt/isarmg/xszs/releases/0.0.1"
+printf 'existing release\n' >"$occupied_release_root/opt/isarmg/xszs/releases/0.0.1/preserved"
+occupied_digest="$(tree_digest "$occupied_release_root")"
+if XSZS_SETUP_ROOT="$occupied_release_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "installation accepted an occupied release directory"
+fi
+[[ "$(tree_digest "$occupied_release_root")" == "$occupied_digest" &&
+  ! -e "$occupied_release_root/etc" && ! -e "$occupied_release_root/var" ]] ||
+  fail "rejected occupied release directory changed installation state"
+
+conflict_root="$test_root/conflict-root"
+mkdir -m 0755 "$conflict_root"
+XSZS_SETUP_ROOT="$conflict_root" XSZS_SETUP_TEST=1 "$setup_script" >/dev/null
+conflict_file="$conflict_root/opt/isarmg/xszs/releases/$version/README.md"
+printf '\nconflict\n' >>"$conflict_file"
+conflict_digest="$(sha256sum "$conflict_file" | awk '{print $1}')"
+if XSZS_SETUP_ROOT="$conflict_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "same version silently accepted different installed content"
+fi
+[[ "$(sha256sum "$conflict_file" | awk '{print $1}')" == "$conflict_digest" ]] ||
+  fail "immutable conflicting release was overwritten"
+
+symlink_release_root="$test_root/symlink-release-root"
+release_escape="$test_root/release-escape"
+mkdir -p "$symlink_release_root/opt/isarmg/xszs" "$release_escape"
+ln -s "$release_escape" "$symlink_release_root/opt/isarmg/xszs/releases"
+if XSZS_SETUP_ROOT="$symlink_release_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "symlinked releases directory was accepted"
+fi
+[[ -z "$(find "$release_escape" -mindepth 1 -print -quit)" ]] || fail "release symlink escaped test root"
+
+symlink_config_root="$test_root/symlink-config-root"
+config_escape="$test_root/config-escape"
+mkdir -p "$symlink_config_root/etc" "$config_escape"
+ln -s "$config_escape" "$symlink_config_root/etc/isarmg"
+if XSZS_SETUP_ROOT="$symlink_config_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "symlinked configuration directory was accepted"
+fi
+[[ -z "$(find "$config_escape" -mindepth 1 -print -quit)" ]] || fail "config symlink escaped test root"
+
+malicious_current_root="$test_root/malicious-current-root"
+mkdir -p "$malicious_current_root/opt/isarmg/xszs"
+ln -s /tmp "$malicious_current_root/opt/isarmg/xszs/current"
+if XSZS_SETUP_ROOT="$malicious_current_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "an unmanaged current symlink was accepted"
+fi
+[[ ! -e "$malicious_current_root/etc" && ! -e "$malicious_current_root/var" ]] ||
+  fail "unmanaged current rejection wrote new install state"
+
+special_config_root="$test_root/special-config-root"
+mkdir -p "$special_config_root/etc/isarmg"
+mkfifo "$special_config_root/etc/isarmg/xszs.env"
+if XSZS_SETUP_ROOT="$special_config_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "a special configuration target was accepted"
+fi
+
+hardlink_config_root="$test_root/hardlink-config-root"
+mkdir -p "$hardlink_config_root/etc/isarmg"
+touch "$hardlink_config_root/etc/isarmg/xszs.env"
+ln "$hardlink_config_root/etc/isarmg/xszs.env" "$hardlink_config_root/config-alias"
+if XSZS_SETUP_ROOT="$hardlink_config_root" XSZS_SETUP_TEST=1 \
+  "$setup_script" >/dev/null 2>&1; then
+  fail "a hard-linked configuration target was accepted"
+fi
+
+for setting in \
+  'User=ixcss-media' \
+  'Group=ixcss-media' \
+  'UMask=0077' \
+  'StateDirectory=isarmg/xszs' \
+  'RuntimeDirectory=isarmg/xszs' \
+  'EnvironmentFile=/etc/isarmg/xszs.env' \
+  'ExecStart=/opt/isarmg/xszs/current/bin/xszs run --release-root /opt/isarmg/xszs/current' \
+  'ReadWritePaths=/var/lib/isarmg/xszs /run/isarmg/xszs' \
+  'ProtectSystem=strict' \
+  'ProtectHome=true' \
+  'NoNewPrivileges=true' \
+  'PrivateTmp=true' \
+  'PrivateDevices=true' \
+  'ProtectKernelTunables=true' \
+  'ProtectKernelModules=true' \
+  'ProtectKernelLogs=true' \
+  'ProtectControlGroups=true' \
+  'RestrictSUIDSGID=true' \
+  'LockPersonality=true'; do
+  assert_unit_setting "$setting"
+done
+
+if grep -q '^ExecStartPre=' "$unit_source"; then
+  fail "systemd split release verification from the serving process"
+fi
+
+if grep -Eqi 'postgres|/mnt/|User=root|XSZS_BINARY|Cargo\.toml' \
+  "$setup_script" "$release_root/scripts/run-server-wsl.sh" \
+  "$release_root/scripts/start-server-wsl.sh" "$unit_source"; then
+  fail "release deployment still trusts source state, PostgreSQL, /mnt, or root service execution"
+fi
+if grep -Eq 'sed[[:space:]]+-i|systemctl[[:space:]]+(enable|start|restart)' "$setup_script"; then
+  fail "setup mutates secrets with sed or starts the service"
+fi
+
+if grep -Eq -- '--clobber|gh[[:space:]]+release[[:space:]]+upload|"v\*\.\*\.\*"' \
+  "$project_dir/.github/workflows/release.yml"; then
+  fail "release workflow can overwrite assets or accepts mutable tags"
+fi
+if "$project_dir/scripts/verify-release-version.sh" v9.9.9 >/dev/null 2>&1; then
+  fail "release version gate accepted a non-current tag"
+fi
+
+bash -n "$setup_script" "$release_root/scripts/run-server-wsl.sh" \
+  "$release_root/scripts/start-server-wsl.sh" "$release_root/scripts/verify-server-wsl.sh" \
+  "$project_dir/scripts/build-server-release.sh" "$0"
+python3 - "$project_dir/scripts/write-release-manifest.py" <<'PY'
+from pathlib import Path
+import sys
+compile(Path(sys.argv[1]).read_text(encoding="utf-8"), sys.argv[1], "exec")
+PY
+if command -v shellcheck >/dev/null; then
+  shellcheck "$setup_script" "$release_root/scripts/run-server-wsl.sh" \
+    "$release_root/scripts/start-server-wsl.sh" "$release_root/scripts/verify-server-wsl.sh" \
+    "$project_dir/scripts/build-server-release.sh" "$0"
+fi
+if [[ "${XSZS_VERIFY_SYSTEMD:-0}" == "1" ]]; then
+  command -v systemd-analyze >/dev/null || fail "systemd-analyze is required for unit verification"
+  # The real installer was checked above with its exact host-prefix pointer.
+  # systemd-analyze resolves inside --root, where that absolute test prefix
+  # would be applied twice. Map it to the same verified generation in this
+  # synthetic root before checking the original, byte-identical service unit.
+  ln -s "releases/$version" "$install_root/opt/isarmg/xszs/.unit-current"
+  mv -T "$install_root/opt/isarmg/xszs/.unit-current" \
+    "$install_root/opt/isarmg/xszs/current"
+  if ! systemd-analyze --root="$install_root" --recursive-errors=no verify "$installed_unit" \
+    >"$test_root/systemd-verify" 2>&1; then
+    cat "$test_root/systemd-verify" >&2
+    fail "systemd unit verification failed"
+  fi
+fi
+
+printf 'current release archive passed identity, smoke, tamper, and temporary-root deployment tests\n'
