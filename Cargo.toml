@@ -27,7 +27,7 @@ image = { version = "=0.25.10", default-features = false, features = ["jpeg", "p
 xszs-protocol = { path = "crates/protocol" }
 rand = { version = "0.10.3" }
 rustix = { version = "1.1.5", features = ["fs", "system"] }
-xcss = { git = "https://github.com/isarmg/xcss.git", rev = "fd90ca39b8f03359a0ba92e182f7d84bc7c1a315", version = "=1.0.1", features = ["tracing"] }
+xcss = { git = "https://github.com/isarmg/xcss.git", rev = "3f751196615edd9f7fda2d76a5aa90f9f42586dc", version = "=1.0.2", features = ["tracing"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151" }
 sha2 = { version = "0.11.0" }

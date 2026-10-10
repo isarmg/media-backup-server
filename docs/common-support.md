@@ -9,13 +9,13 @@
 
 ## 固定输入
 
-Cargo manifest 指定官方 Git URL、完整 revision 和精确 `=1.0.1`，Cargo.lock 固定依赖解析结果。
+Cargo manifest 指定官方 Git URL、完整 revision 和精确 `=1.0.2`，Cargo.lock 固定依赖解析结果。
 Web 的 package.json 依赖条目如下，合并到项目自身的 dependencies 中：
 
 ```json
 {
   "dependencies": {
-    "@xcss/web": "https://github.com/isarmg/xcss/releases/download/v1.0.1/xcss-web-1.0.1.tgz"
+    "@xcss/web": "https://github.com/isarmg/xcss/releases/download/v1.0.2/xcss-web-1.0.2.tgz"
   }
 }
 ```
