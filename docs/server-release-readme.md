@@ -54,7 +54,7 @@ xszs-1.0.0-x86_64-unknown-linux-gnu/
 
 其中：
 
-- `release-manifest.json` 绑定产品、版本、源码 revision、目标架构、Schema、移动 FFI、管理 Web 和每个
+- `release-manifest.json` 绑定产品、版本、源码 revision、目标架构、Schema、管理 Web 和每个
   文件的相对路径、权限、大小、SHA-256。
 - `bin/xszs` 同时实现独立发行校验和服务启动时校验。仅替换 manifest 或仅替换二进制都
   无法组成有效发行。
@@ -120,7 +120,7 @@ sudo ./scripts/setup-wsl.sh
    `/var/lib/isarmg/xszs`，登录 shell 必须是 `nologin`。
 4. 把经过校验的完整发行复制到 `/opt/isarmg/xszs/releases/1.0.0`，设为 root 所有，并再次
    运行 installed-release 校验。
-5. 创建 `/var/lib/isarmg/xszs/db` 与 `/var/lib/isarmg/xszs/data`，权限为 `0750`，
+5. 创建 `/var/lib/isarmg/xszs/db` 与 `/var/lib/isarmg/xszs/data`，权限为 `0700`，
    所有者为 `xszs:xszs`。
 6. 若配置不存在，以 root、`0600`、单硬链接方式排他创建 `/etc/isarmg/xszs.env`，生成彼此
    独立的 256-bit 初始管理员密码和指标 Token；脚本不会把秘密打印到终端。
@@ -342,8 +342,8 @@ commit、待回收 blob 和孤儿 commit staging。
 对象 Hash 验证总读取量最多 1 TiB、总时限 600 秒，SQLite 查询使用三秒执行界限。
 超过边界会完整报错，不返回被截断的成功结果，也不删除已有文件或数据库事实。
 
-它们读取与服务相同的环境配置和状态路径。只应在明确的维护窗口内、使用受控运维方式运行，避免与正在
-处理业务流量的进程争用；运行前先保存证据并确认当前发行身份。不要把未经验证的数据库 ID 拼进递归文件
+它们读取与服务相同的环境配置和状态路径，并取得排他维护锁。执行前须停止 `xszs.service`，
+确认服务退出后再于维护窗口内运行；不能与同一数据目录的服务并行。先保存证据并确认当前发行身份。不要把未经验证的数据库 ID 拼进递归文件
 删除命令，也不要手工清空整个暂存目录。
 
 ## 12. 常见故障定位

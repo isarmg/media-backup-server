@@ -35,7 +35,7 @@ mkdir -p "$PWD/dist"
 
 Cargo release build script 拒绝其他 target；归档脚本还会核对构建主机为 Linux x86_64，并直接检查输入
 二进制为 64 位 little-endian x86_64 ELF。构建器拒绝覆盖输出。归档 manifest 固定产品、版本、40 位
-revision、target、`v1` 移动 API、`plain-v1`、Schema、移动 FFI、Web 与全树文件权限/大小/SHA-256；
+revision、target、`v1` 移动 API、`plain-v1`、Schema、Web 与全树文件权限/大小/SHA-256；
 额外文件、链接、特殊文件或硬链接别名均失败。
 
 ## 3. 安装
@@ -93,9 +93,10 @@ Session 是固定平台策略，不提供产品级 TTL 配置。管理员登录�
 与真正零实例分别表达，超出 JavaScript 精确整数范围的统计明确失败，不截断或重写存量数据。
 
 管理 Web 的日志页使用 Server 本地时区的日历日期。`GET /api/v1/admin/logs` 返回
-`{date,instance_id,logs,previous_cursor,next_cursor}`，省略 date 时默认 Server 当天；
-`?date=YYYY-MM-DD` 指定日期，`&instance_id=UUID` 按实例筛选。每页最多 50 条，按审计序号倒序，
-使用返回的 cursor 继续翻页；分页请求必须携带显式 date，游标与日期/实例不一致会被拒绝。
+`{date,instance_id,logs,previous_cursor,next_cursor}`；多日范围还包含 `end_date`，省略日期时默认 Server 当天。
+单日使用 `?date=YYYY-MM-DD`，范围使用 `?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`，
+包含起止当天，不能与 `date` 混用；`&instance_id=UUID` 按实例筛选。每页最多 50 条，按审计序号倒序，
+使用返回的 `cursor` 继续翻页；翻页必须携带相同的显式日期或范围，游标与范围/实例不一致会被拒绝。
 实例筛选覆盖设备 actor、属于设备的 API Key actor 及管理员 device entity，不按共同 account 猜测。
 从实例详细信息进入日志会保留该实例上下文，“全部实例”恢复全局日志；刷新返回第一页。
 日期边界由两个本地午夜分别换算为 UTC，夏令时日仍按完整日历日筛选；展示时间附 UTC 偏移。
@@ -126,7 +127,7 @@ sudo /opt/isarmg/xszs/releases/1.0.0/scripts/run-server-wsl.sh
 启动脚本先检查 `uname`，二进制的 `run --release-root` 再通过内核 `uname(2)` 检查 Linux x86_64，systemd 单元
 还有 `ConditionArchitecture=x86-64`。三层任何一层不满足都必须在读取业务配置和创建状态前失败。
 
-带环境配置运行：
+`doctor` 与 `reconcile scan` 取得排他维护锁，不能与同一数据目录的运行服务并行。先停止 `xszs.service` 并确认已退出，再带同一环境配置运行：
 
 ```bash
 xszs doctor
@@ -227,7 +228,7 @@ JavaScript 安全整数范围；超出范围时返回结构化错误，不返回
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 xcss `=1.0.0` / `627d988a4ed471469ed4fdce8af0ea6b5c131ce6`；一个 @xcss/web 包使用
+当前 Server Rust 固定 xcss `=1.0.0` / `b0524c4fb018b5ba4f27ad71bf32b74c8ef0a972`；一个 @xcss/web 包使用
 xcss 1.0.0 正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
 归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web-assets.json`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。
