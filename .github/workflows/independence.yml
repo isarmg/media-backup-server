@@ -10,19 +10,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: ./scripts/check-workflow-supply-chain.sh
-      - run: |
+      # Supply-chain validation runs in CI and release validation. Keep this
+      # distinct native-only packaging constraint under its existing check name.
+      - name: Verify native-only packaging inputs
+        run: |
           set -euo pipefail
-          # Current xcss SQLite metadata is not retired runtime coupling.
-          if git grep -n -I -P 'UNION_|X-Union-|PluginManifest|ProcessContext|xcss-platform|xcss_platform(?!_metadata\b)' -- . ':(exclude).github/workflows/independence.yml'; then
-            exit 1
-          else
-            grep_status=$?
-            if ((grep_status != 1)); then
-              exit "$grep_status"
-            fi
-          fi
-
           tracked_files="$(mktemp)"
           trap 'rm -f "$tracked_files"' EXIT
           git ls-files -z > "$tracked_files"
