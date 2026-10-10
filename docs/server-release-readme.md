@@ -1,165 +1,66 @@
-# xszs 1.0.0 发行包使用手册
+# 安装 xszs 服务端
 
-本文档只面向已经构建完成的 `xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz`
-正式发行包。它不是源码构建指南，也不描述 Android、iOS 或开发环境。本文出现的命令、路径和文件均以
-当前 `1.0.0` 发行包的实际内容为准。
+本手册随 `xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz` 打包，使用包内程序和脚本完成全新安装。
+目标是通过 HTTPS 登录管理页，并让 xszc 手机客户端完成一份测试媒体的上传和读取。
 
-## 1. 先了解发行边界
+## 主机准备
 
-- Server 只支持 **Linux x86_64（AMD64）**，目标为
-  `x86_64-unknown-linux-gnu`。ARM、其他 CPU 架构、macOS、Windows 原生环境和非 GNU Linux 均不在
-  Server 支持范围内。
-- 正式运行方式是 systemd。服务固定使用非 root 账户 `xszs`。
-- 当前发行使用完整版本实体目录；只有 `run` 接受同一安装目录下的单跳 `current`，目标必须是当前编译版本的绝对实体路径，拒绝其他软链接。
-- 安装器只接受全新的目标。它不会覆盖、合并或修补已有 `1.0.0` 发行目录，也不会覆盖已有 systemd
-  unit。
-- 媒体对象以明文字节写入数据目录。生产主机必须另行提供磁盘或卷加密、最小权限和加密异地备份。
+- Linux AMD64 GNU（`x86_64-unknown-linux-gnu`），systemd，sudo 管理权限。
+- Bash、Python 3.11+、GNU coreutils/tar、gzip、getent、useradd、groupadd 和 curl。
+- HTTPS 域名及同机或可信直连的 Caddy/nginx。
+- 数据库和媒体存储的容量、inode 及访问权限。
 
-## 2. 主机前置条件
+媒体以明文字节保存，主机或存储卷应提供加密并限制读取权限。安装器只接受全新发行目录与 unit；已有部署先保留现场，按其实际状态处理。
 
-安装前确认主机满足以下条件：
+## 1. 校验下载
 
-| 条件 | 当前要求 | 不满足时的结果 |
-|---|---|---|
-| 操作系统与架构 | Linux x86_64 | 安装脚本和 Server 均会失败关闭 |
-| 初始化系统 | systemd | 无法安装和启动正式服务 |
-| 管理权限 | 可使用 `sudo` 成为 root | 无法创建系统账户、配置、状态目录和 unit |
-| 基础命令 | Bash、Python 3.11+、GNU coreutils、GNU tar、gzip、`getent`、`useradd`、`groupadd`、`curl` | 安装、校验或健康检查无法完成 |
-| 入口 TLS | 同机或可信直连的 Caddy/Nginx 等反向代理 | 生产安全模式下管理页和 API 请求会被拒绝 |
-| 存储 | 为数据库和媒体数据分别预留容量、inode 和备份空间 | 上传、缩略图或 SQLite 写入可能失败 |
+把归档与同版 `SHA256SUMS` 放在同一目录：
 
-建议在独立服务主机上部署。不要把不可信用户赋予 `/opt/isarmg`、`/etc/isarmg`、
-`/var/lib/isarmg` 或 systemd unit 的写权限。
-
-## 3. 发行包内容
-
-解压后只有一个顶层目录：
-
-```text
-xszs-1.0.0-x86_64-unknown-linux-gnu/
-├── bin/xszs
-├── config/xszs.env.example
-├── docs/feature-inventory-and-tradeoffs.md
-├── scripts/
-│   ├── setup-wsl.sh
-│   ├── start-server-wsl.sh
-│   ├── run-server-wsl.sh
-│   └── verify-server-wsl.sh
-├── share/web-assets.json
-├── systemd/xszs.service
-├── LICENSE
-├── README.md
-└── release-manifest.json
-```
-
-其中：
-
-- `release-manifest.json` 绑定产品、版本、源码 revision、目标架构、Schema、管理 Web 和每个
-  文件的相对路径、权限、大小、SHA-256。
-- `bin/xszs` 同时实现独立发行校验和服务启动时校验。仅替换 manifest 或仅替换二进制都
-  无法组成有效发行。
-- `share/web-assets.json` 是 xcss 编译时生成的资源清单，必须逐字节等于 binary 的 `web-assets`
-  输出。HTML/JS/CSS/字体全部内嵌于 binary，运行时无需 Web 目录；不得编辑清单或目录覆盖。
-- `docs/feature-inventory-and-tradeoffs.md` 是当前完整功能与取舍清单，说明每项能力的分类、复杂度、
-  删除后果和验证要求。
-
-发行树不允许出现缺失文件、额外文件、符号链接、硬链接别名、特殊文件、权限漂移或内容漂移。任何这类
-变化都会使校验或启动失败。需要改配置时只编辑 `/etc/isarmg/xszs.env`，不要编辑发行树。
-
-## 4. 下载后先校验
-
-先从可信发布渠道取得归档的 SHA-256，再比较本地文件。不要把归档旁边由未知来源提供的摘要当作可信
-根。
-
-```bash
-archive='xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz'
-expected_sha256='从可信发布页复制的64位小写SHA-256'
-printf '%s  %s\n' "$expected_sha256" "$archive" | sha256sum --check --strict -
-```
-
-检查归档只包含预期顶层目录，然后解压：
-
-```bash
-tar -tzf "$archive"
-tar -xzf "$archive"
+```sh
+grep ' xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
+  | sha256sum --check -
+tar -tzf xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz
 cd xszs-1.0.0-x86_64-unknown-linux-gnu
-```
-
-在安装前读取二进制身份并验证整个解压目录：
-
-```bash
 ./bin/xszs release-identity
 ./bin/xszs release-verify "$PWD"
 ```
 
-`release-identity` 应报告以下关键字段：
+摘要应来自可信发布渠道。校验成功后，身份应包含 `product=xszs`、`version=1.0.0`、
+`target=x86_64-unknown-linux-gnu`、`api_version=v1`、`storage_encoding=plain-v1`、结构修订 1 和完整源码 SHA。
+完整校验输出以 `XSZS_RELEASE_VERIFIED_V1` 开头。校验失败时重新核对归档来源与完整性。
 
-- `product`：`xszs`
-- `version`：`1.0.0`
-- `target`：`x86_64-unknown-linux-gnu`
-- `api_version`：`v1`
-- `storage_encoding`：`plain-v1`
-- `server_schema_revision`：`1`
+## 2. 安装
 
-`source_revision` 必须是 40 位小写十六进制 Git revision。`release-verify` 成功时只输出一行以
-`XSZS_RELEASE_VERIFIED_V1` 开头的身份；失败时不要继续安装，也不要手工改 manifest。
+在刚解压的包根目录执行：
 
-## 5. 全新安装
-
-在发行包顶层运行：
-
-```bash
+```sh
 sudo ./scripts/setup-wsl.sh
-```
-
-脚本执行顺序如下：
-
-1. 检查 Linux x86_64、root 权限、发行包物理路径和完整 payload。
-2. 在任何安装写入前拒绝链接路径、特殊文件、非空发行目标、已有版本目录和已有 systemd unit。
-3. 创建或核对专用组与账户 `xszs`；账户 home 固定为
-   `/var/lib/isarmg/xszs`，登录 shell 必须是 `nologin`。
-4. 把经过校验的完整发行复制到 `/opt/isarmg/xszs/releases/1.0.0`，设为 root 所有，并再次
-   运行 installed-release 校验。
-5. 创建 `/var/lib/isarmg/xszs/db` 与 `/var/lib/isarmg/xszs/data`，权限为 `0700`，
-   所有者为 `xszs:xszs`。
-6. 若配置不存在，以 root、`0600`、单硬链接方式排他创建 `/etc/isarmg/xszs.env`，生成彼此
-   独立的 256-bit 初始管理员密码和指标 Token；脚本不会把秘密打印到终端。
-7. 排他安装 `/etc/systemd/system/xszs.service`，执行 `systemctl daemon-reload`，但不会启动
-   服务。
-
-正常完成时固定布局为：
-
-```text
-/opt/isarmg/xszs/releases/1.0.0/   # root 拥有的不可变发行
-/etc/isarmg/xszs.env              # root:root，0600，唯一可编辑配置
-/etc/systemd/system/xszs.service  # root:root，0644，发行包中的 unit
-/var/lib/isarmg/xszs/db/           # SQLite 状态
-/var/lib/isarmg/xszs/data/         # 媒体、缩略图和上传暂存状态
-/run/isarmg/xszs/                  # systemd 创建的运行时目录
-```
-
-安装是 one-shot/no-clobber。再次执行不会覆盖同版本，也不会用“内容相同”作为复用依据。若目标已有其他
-内容，先查清来源；不要删除或改名后强行安装。已有配置文件只有在它是安全的普通单链接文件时才可能被
-保留，但已有 unit 或非空应用目录会使安装拒绝。
-
-## 6. 首次启动前配置
-
-安装器创建的配置包含一行：
-
-```text
-# INITIAL-SECRETS-MUST-BE-REPLACED
-```
-
-在首次启动前必须用 `sudoedit` 安全记录或替换三个初始秘密，并删除这行 marker：
-
-```bash
 sudoedit /etc/isarmg/xszs.env
 ```
 
-不要把配置复制到工单、聊天、Shell history 或公开仓库。配置文件必须保持 root 所有、权限 `0600`、
-单硬链接且不是符号链接；启动脚本会再次检查这些条件。
+安装器创建专用 `xszs` 用户、受保护的配置和状态目录，安装 unit 后暂不启动。预期布局：
 
-### 6.1 配置项
+```text
+/opt/isarmg/xszs/releases/1.0.0/   只读发行树
+/opt/isarmg/xszs/current          指向同版发行树的受控链接
+/etc/isarmg/xszs.env             root:root 0600
+/etc/systemd/system/xszs.service root:root 0644
+/var/lib/isarmg/xszs/db/          数据库，xszs:xszs 0700
+/var/lib/isarmg/xszs/data/        媒体与暂存，xszs:xszs 0700
+/run/isarmg/xszs/                systemd 运行时目录
+```
+
+配置在发行树之外修改；发行树、manifest 和内嵌 Web 清单保持原样，启动时会重新核验。
+
+## 3. 审阅配置
+
+在 `/etc/isarmg/xszs.env` 中确认或替换独立的初始管理员密码、`XSZS_CREDENTIALS_KEY` 与 `METRICS_TOKEN`。
+将它们保存在受控秘密存储中，然后删除已审阅的 `# INITIAL-SECRETS-MUST-BE-REPLACED` 行。
+授权码密文依赖 `XSZS_CREDENTIALS_KEY`；该值必须与当前数据持续匹配。
+配置保持 root 所有、`0600`、单硬链接普通文件。
+
+### 配置项
 
 | 变量 | 默认示例或语义 | 生产约束 |
 |---|---|---|
@@ -178,35 +79,11 @@ sudoedit /etc/isarmg/xszs.env
 | `METRICS_TOKEN` | 安装时随机生成 | 独立 Bearer Token；空值会关闭 `/metrics` |
 | `RUST_LOG` | `xszs=info,tower_http=info` | 控制日志级别；不要开启会泄露敏感数据的临时调试日志 |
 
-### 6.2 管理员身份合同
+管理员 username 规范化为 3–64 bytes 的小写 ASCII，首尾字母数字，中间允许 `[a-z0-9._-]`；密码为 12–1024 bytes 且不含 ASCII 控制字符。手机使用实例授权码，管理员凭据仅用于管理页面。
 
-Server 与管理 Web 只有一个角色：`admin`。不存在访客、普通后台角色或邮箱登录。
+## 4. 配置 HTTPS
 
-- 登录请求精确为 `{username,password}`。
-- 登录候选 username 长度为 1–64 bytes，必须是可打印 ASCII；规范化会去除首尾 ASCII 空白并转为
-  ASCII 小写。
-- 规范化后的 canonical username 长度为 3–64 bytes，首尾必须是字母或数字，中间字符只允许
-  `[a-z0-9._-]`。
-- `@`、Unicode、内部空白、控制字符和首尾分隔符均被拒绝。
-- 管理员密码必须为 12–1024 bytes，且不得包含 ASCII 控制字符。
-- 管理员浏览器 Session 与移动备份账户、设备 Bearer Token、API Key 是相互隔离的身份域；不得把
-  `BOOTSTRAP_ADMIN_USERNAME` 当作移动账户配置，也不得复制凭据实现“兼容”。
-
-## 7. 配置 HTTPS 反向代理
-
-生产流量应为：
-
-```text
-浏览器或移动客户端
-        │ HTTPS
-        ▼
-可信反向代理
-        │ HTTP，仅同机 loopback 或受控私网
-        ▼
-127.0.0.1:8080 xszs
-```
-
-最小 Caddy 示例：
+由代理提供 TLS，服务默认只监听 `127.0.0.1:8080`。最小 Caddy 站点配置：
 
 ```caddyfile
 media.example.com {
@@ -214,216 +91,75 @@ media.example.com {
 }
 ```
 
-代理必须覆盖而不是盲目信任客户端传入的转发头，并正确传递 HTTPS 语义。Server 只在 socket peer
-落入 `TRUSTED_PROXY_CIDRS` 时信任对应转发信息。把互联网网段或任意客户端地址加入该列表会使攻击者
-伪造来源或安全协议；不要为了消除 4xx 而放宽为全网段。
+将示例域名换成实际域名并验证证书。`TRUSTED_PROXY_CIDRS` 只包含真实直连代理；代理覆盖访客提供的转发头并传递 HTTPS 语义。防火墙限制业务流量经代理进入。
 
-防火墙必须阻止外部客户端绕过代理直接访问 Server。TLS 证书、私钥、HSTS 和公网访问控制由反向代理
-负责，但 Server 仍会在业务入口强制验证安全传输语义。
+## 5. 初始化并启动
 
-## 8. 启动与启用服务
+以下命令由 systemd 为服务用户加载私有环境。`init` 读取配置中的初始管理员密码：
 
-完成秘密替换、删除 marker 并配置反向代理后运行。`init` 直接读取 `EnvironmentFile` 中的私有 `BOOTSTRAP_ADMIN_PASSWORD`，没有交互输入，也不接受密码命令行参数：
-
-```bash
-sudo systemd-run --wait --collect -p User=xszs -p Group=xszs -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
+```sh
+sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
+  -p EnvironmentFile=/etc/isarmg/xszs.env \
+  /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
 sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
 ```
 
-该脚本会：
+`init` 只用于全新状态，普通运行不会创建数据库或重置管理员。已有状态使用 `config validate`。
+启动脚本复核发行、unit、配置和部署指针，然后启用并启动 `xszs.service`。
 
-1. 核对主机架构、固定发行目录的 root 所有权和不可写属性；
-2. 由发行内真实二进制复核 manifest、身份和 payload；
-3. 核对已安装 unit 与发行内 unit 字节一致；
-4. 核对配置为 root 所有、`0600`、单硬链接且 marker 已删除；
-5. 执行 `systemctl enable --now xszs.service` 并输出完整状态。
+## 6. 验证第一份上传
 
-systemd 最终只执行固定命令：
-
-```text
-/opt/isarmg/xszs/current/bin/xszs run --release-root /opt/isarmg/xszs/current
-```
-
-服务进程会再次验证它确实物理位于该发行根内，然后才读取业务配置并打开已有状态。直接复制二进制到其他位置、使用任意软链接或错误版本的 `current` 均会被拒绝；首次数据库、管理员和媒体目录由 `init` 显式创建。
-
-若只想启动已有服务并持续查看 Journal，可运行：
-
-```bash
-sudo /opt/isarmg/xszs/releases/1.0.0/scripts/run-server-wsl.sh
-```
-
-此脚本不会替代首次安装或首次启用；它同样先做发行、unit 和配置检查，再调用 `systemctl start`，最后
-以前台方式跟随该 unit 的日志。使用 `Ctrl+C` 只结束日志跟随，不等于停止服务。
-
-## 9. 健康检查与验收
-
-本机基础检查：
-
-```bash
+```sh
 curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
-```
-
-- `/healthz` 仅以状态码表示存活，不返回内部信息。
-- `/readyz` 同时探测 SQLite 与数据目录；返回 `503` 时不能接入业务流量。
-
-使用包内验收脚本检查健康端点与管理页：
-
-```bash
 /opt/isarmg/xszs/releases/1.0.0/scripts/verify-server-wsl.sh
 ```
 
-默认检查 `http://127.0.0.1:8080`，并用 `X-Forwarded-Proto: https` 模拟可信代理语义。若监听地址或
-代理拓扑不同，可只为本次命令覆盖：
+本机检查应成功，验收脚本默认输出 `health=204 admin_page=200`。自定义监听时可为脚本设置 `XSZS_VERIFY_URL` 和 `XSZS_VERIFY_FORWARDED_PROTO`。
 
-```bash
-XSZS_VERIFY_URL='http://127.0.0.1:18080' \
-XSZS_VERIFY_FORWARDED_PROTO='https' \
-  /opt/isarmg/xszs/releases/1.0.0/scripts/verify-server-wsl.sh
-```
+接着从真实 HTTPS 域名打开 `/admin`，登录并新建备份实例。手机 xszc 使用实例授权码配对，上传一份测试照片或视频，核对提交与读取结果。完成这一步后才确认代理、认证和媒体路径都可用。
 
-预期输出为 `health=200 admin_page=200`。该检查不能替代从真实公网域名验证证书链、DNS、代理、Cookie
-和登录流程。
+## 日常运行
 
-管理 Web 入口是 `/admin`。管理员认证 API 是：
-
-- `POST /api/v1/auth/login`
-- `GET /api/v1/auth/session`
-- `POST /api/v1/auth/logout`
-
-移动端 API 位于 `/v1/*`。备份账户只是媒体归属租户；每个客户端实例使用管理员生成的独立授权码配对，
-成功后获得设备 Bearer Token。更换授权码会撤销旧 Token 并要求重新配对，不接受旧的账户密码 bootstrap。
-
-## 10. 日常运维
-
-### 10.1 systemd 与日志
-
-```bash
+```sh
 sudo systemctl status xszs.service --no-pager --full
-sudo journalctl --unit xszs.service --since today
-sudo journalctl --unit xszs.service --follow
+sudo journalctl -u xszs.service --since today --no-pager
+sudo systemctl stop xszs.service
 ```
 
-不要把完整配置、密码、Bearer Token、Cookie、私人媒体路径或数据库内容粘贴到公开 issue。收集日志时
-先做脱敏，并保留时间范围、HTTP 状态、请求 ID、磁盘状态和只读摘要。
+上面第三条用于停服维护，按需要执行。`scripts/run-server-wsl.sh` 会启动已有部署并跟随日志；Ctrl+C 仅停止日志查看。
+关注磁盘/inode、上传错误、重启和证书到期。非空 `METRICS_TOKEN` 启用受独立 Bearer Token 保护的 `/metrics`。
 
-### 10.2 指标
+### 离线诊断
 
-配置非空 `METRICS_TOKEN` 后，`/metrics` 需要独立 Bearer Token：
+`doctor` 和 `reconcile scan` 需要停服并确认进程退出。用同一环境、同一服务用户执行：
 
-```bash
-curl --fail \
-  --header 'Authorization: Bearer <独立的METRICS_TOKEN>' \
-  http://127.0.0.1:8080/metrics
+```sh
+sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
+  -p EnvironmentFile=/etc/isarmg/xszs.env \
+  /opt/isarmg/xszs/releases/1.0.0/bin/xszs doctor
 ```
 
-指标只用于监控，不要复用管理员密码、浏览器 Cookie、移动设备 Token 或 API Key。若不需要指标，把
-配置值留空即可关闭该端点；修改配置后通过受控维护窗口重启服务。
+Doctor 检查当前结构、数据库完整性、对象 Hash、上传恢复及存储。若诊断确认有待处理提交或回收对象，使用相同前缀把最后的 `doctor` 换为 `reconcile scan`；它会推进已记录的提交和物理回收。完成后重新检查并启动。
+诊断预算为最多 100,000 项、64 MiB 索引/路径、64 层目录、1 TiB Hash 读取、600 秒总时限及三秒 SQLite 查询；超限会报错。
 
-### 10.3 容量与状态
+## 常见问题
 
-持续监控：
+| 症状 | 检查与处理 |
+|---|---|
+| 发行校验失败 | 核对摘要、源码身份、架构、文件权限和归档完整性 |
+| 目标或 unit 已存在 | 保留已有部署，确认它的来源；安装器只处理新目标 |
+| 初始秘密审阅未完成 | 审阅三个独立秘密，删除标记并保持配置权限 |
+| 服务启动后退出 | 查看 Journal 第一条错误，检查路径、权限、当前结构和密钥 |
+| 存活正常而 readiness 503 | 检查挂载、数据库、空间、inode 和存储权限 |
+| HTTPS 或登录失败 | 检查证书、真实代理地址、username、Cookie 和主机时间 |
+| 上传失败 | 检查手机权限和队列、分块大小、并发、代理限制和存储空间 |
 
-- `/var/lib/isarmg/xszs/db` 所在文件系统的容量、inode、I/O 延迟和 SQLite sidecar；
-- `/var/lib/isarmg/xszs/data` 的媒体字节、缩略图、分块暂存与孤儿回收积压；
-- `/readyz`、进程重启次数、上传错误率、活动上传数和存储字节数；
-- 反向代理证书到期时间、5xx、请求 body 限制和 upstream timeout。
+数据结构错误时保留原数据并停止写入调查；手改元数据无法修复结构。
+删除 API 返回 `202` 表示物理回收仍在处理中，`204` 表示完成；检查协调状态后再处理。
+分享故障时提供脱敏错误、时间、请求 ID 和程序身份，生产媒体、数据库及秘密保留在受控环境。
 
-数据库和媒体目录构成同一个逻辑一致性单元。不得只复制 `app.db` 而忽略 SQLite sidecar，也不得只
-复制媒体目录后假设 metadata 会自动重建。
+## 包内容与进一步阅读
 
-### 10.4 离线诊断与协调
-
-`doctor` 会检查当前产品元数据、精确 Schema、SQLite integrity/foreign keys、对象 Hash、上传恢复
-状态、无引用 blob、数据库可回滚写探针和可清理存储探针。`reconcile scan` 会处理未完成 upload
-commit、待回收 blob 和孤儿 commit staging。
-
-诊断最多保留 100,000 个目录条目或元数据项，索引与路径累计最多 64 MiB，目录深度最多 64。
-对象 Hash 验证总读取量最多 1 TiB、总时限 600 秒，SQLite 查询使用三秒执行界限。
-超过边界会完整报错，不返回被截断的成功结果，也不删除已有文件或数据库事实。
-
-它们读取与服务相同的环境配置和状态路径，并取得排他维护锁。执行前须停止 `xszs.service`，
-确认服务退出后再于维护窗口内运行；不能与同一数据目录的服务并行。先保存证据并确认当前发行身份。不要把未经验证的数据库 ID 拼进递归文件
-删除命令，也不要手工清空整个暂存目录。
-
-## 12. 常见故障定位
-
-### 12.1 安装器报告发行无效
-
-可能原因包括下载损坏、错误架构、解压后文件被改动、权限改变、额外文件、链接或特殊文件。重新从可信
-渠道下载并核对外部 SHA-256；不要修补 manifest 让坏包通过。
-
-### 12.2 安装器拒绝目标已存在
-
-这是 no-clobber 保护，不是可忽略警告。保存现场并确认该目录或 unit 的来源。本包没有覆盖安装模式；不要删除既有数据或修改 manifest 绕过保护。
-
-### 12.3 启动脚本要求替换初始秘密
-
-编辑 `/etc/isarmg/xszs.env`，妥善保存安装器生成的 `BOOTSTRAP_ADMIN_PASSWORD`、
-`XSZS_CREDENTIALS_KEY` 和 `METRICS_TOKEN`，确认三者属于不同用途后删除精确 marker 行。保持文件 root 所有、
-`0600`、普通文件且只有一个硬链接。后续不得丢失或随意更换授权码主密钥，否则已保存的实例授权码无法解密。
-
-### 12.4 服务启动后立即退出
-
-按以下顺序检查：
-
-1. `systemctl status` 与 Journal 的第一条错误；
-2. 主机是否为 Linux x86_64；
-3. 固定发行目录、unit 和配置的所有权/权限是否漂移；
-4. `DATABASE_URL`、`DATA_DIR` 和 `BIND` 是否有效；Session 生命周期由 xcss 固定；
-5. 数据库是否是精确的当前产品、版本、Schema 和对象指纹；
-6. 数据目录是否可由 `xszs` 访问，以及容量/inode 是否耗尽。
-
-遇到非当前格式或 Schema 漂移必须停止并保留现场。本轮没有旧格式转换流程；不要现场执行
-`ALTER TABLE`、修改版本元数据或添加兼容列。当前状态损坏只能从经验证的当前格式备份恢复。
-
-### 12.5 `/healthz` 正常但 `/readyz` 为 503
-
-进程活着，但 SQLite 查询或数据目录探针失败。检查磁盘、挂载、权限、只读状态、文件系统错误和 Journal。
-在 readiness 恢复前不要让代理继续发送业务流量。
-
-### 12.6 管理页或 API 返回安全传输错误
-
-确认请求确实经过 TLS，Server 的 socket peer 是 `TRUSTED_PROXY_CIDRS` 中的直接代理，代理覆盖并传递
-正确协议。不要把 `REQUIRE_HTTPS` 改为 `false`，也不要把 `DEVELOPMENT` 用于非 loopback 生产监听。
-
-### 12.7 登录失败
-
-确认使用 username 而不是邮箱；检查 canonical 字符规则、密码长度、浏览器 Cookie、代理 HTTPS 语义和
-服务器时间。不要创建第二角色、邮箱别名或旧登录 fallback。
-
-### 12.8 上传或存储失败
-
-检查数据目录容量/inode、分块上限、全局/账户并发限制、反向代理 body 限制和 timeout。永久删除返回
-`202` 表示用户可见 metadata 已删除但物理 blob 仍待协调路径收口；不要盲目重放删除或手工删除文件。
-
-## 13. 安全事件最小处置
-
-1. 在代理层隔离受影响入口，避免继续扩大写入或泄漏；
-2. 保全只读日志、发行 identity、文件摘要、时间线和数据库/媒体一致性证据；
-3. 根据影响范围轮换管理员密码、指标 Token、设备 Token、API Key、TLS 私钥及主机凭据；
-4. 使用独立的当前状态恢复流程从经过验证的一致性备份恢复；
-5. 只为当前版本修复，不在产品代码中加入旧版本兼容路径。
-
-不要公开上传生产数据库、媒体、配置或秘密。不要在尚未保全证据时批量删除日志、数据库 sidecar 或暂存
-目录。
-
-## 14. 验收清单
-
-交付前逐项确认：
-
-- [ ] 主机是 Linux x86_64，systemd 与所需基础命令可用。
-- [ ] 归档外部 SHA-256 来自可信渠道并已核对。
-- [ ] `release-identity` 与 `release-verify` 成功，产品、版本、target 和 source revision 正确。
-- [ ] 安装目标此前为空，没有通过覆盖、软链接或手工复制规避 no-clobber。
-- [ ] 发行位于固定 `/opt/isarmg/xszs/releases/1.0.0`，未被在线编辑。
-- [ ] 配置位于 `/etc/isarmg/xszs.env`，root 所有、`0600`、单硬链接。
-- [ ] 三个初始秘密已按不同用途安全保存或替换，初始化 marker 已删除。
-- [ ] Server 只监听受控地址，公网只能通过可信 TLS 反向代理访问。
-- [ ] `TRUSTED_PROXY_CIDRS` 只包含真实直连代理。
-- [ ] systemd 服务以 `xszs` 运行，unit 与发行内容一致。
-- [ ] `/healthz`、`/readyz` 和包内验收脚本均通过；不存在旧健康路径别名。
-- [ ] 从真实域名验证证书链、管理页、username 登录、Session 和退出。
-- [ ] 数据库与媒体容量、inode、日志、指标和证书到期监控已配置。
-
-以上清单全部通过，才表示当前 `1.0.0` Server 发行具备上线条件。
+归档包含 `bin/xszs`、配置样例、四个安装/运行/验证脚本、systemd unit、`share/web-assets.json`、manifest、LICENSE、本手册和 `docs/feature-inventory-and-tradeoffs.md`。Web 字节嵌入程序。
+完整源码、开发与 API 文档见 [xszs 文档入口](https://github.com/isarmg/xszs/blob/main/docs/README.md)；使用时核对与 `source_revision` 对应的提交。

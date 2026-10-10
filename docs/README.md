@@ -1,26 +1,21 @@
-# xszs 文档总览
+# xszs 文档
 
-本文档集描述 Server `1.0.0` 的当前代码。服务端数据库合同独立保持为 `xszs` `1.0.0`、
-schema revision 1；软件版本、数据库版本和 Client 移动状态版本不是同一个编号。
+xszs 接收 xszc 手机客户端的照片和视频，并提供浏览器管理页面。按下面的顺序完成安装、配对和一次测试上传。
 
-| 文档 | 适用对象 | 内容 |
-|---|---|---|
-| [仓库边界](repository-boundary.md) | 开发者 | Server、Web、protocol 与独立 Client 仓库的职责 |
-| [功能与取舍](feature-inventory-and-tradeoffs.md) | 设计与评审 | 当前功能、风险、删除影响和验证边界 |
-| [接口消费者](interface-consumers.md) | API 与 UI 开发者 | 数据面、管理面及各接口的实际消费者 |
-| [图库 API](gallery-api.md) | 移动端与 Server 开发者 | 筛选、快照、增量、Range 与派生预览 |
-| [运维手册](operations.md) | 发布与值班人员 | 构建、安装、配置、诊断、备份缺口和发布门禁 |
-| [发行包手册](server-release-readme.md) | 部署人员 | 已构建归档的校验、安装、运行和退役 |
-| [服务命令](cli.md) | 部署与诊断人员 | 显式初始化、配置验证和就绪状态 |
-| [开发与验证](development.md) | 开发者 | 工具链、Rust 检查和发行部署验收 |
-| [账号设置](account-settings.md) | 管理员 | 当前管理员账号修改与会话失效语义 |
+## 开始使用
 
-历史行为只在 `releases/` 中说明；排查当前系统时不要把旧发行说明当作现行合同。Android/iOS 构建、
-移动队列和签名资料请查阅独立的
-[xszc](https://github.com/isarmg/xszc) 文档。
+1. [安装与首次运行](server-release-readme.md)：检查归档、安装、配置 HTTPS、显式初始化。
+2. [管理备份实例](usage.md)：创建实例、连接手机、调整配额与查看日志。
+3. [配置参考](configuration.md)：环境变量、存储路径、代理与凭据。
+4. [日常运维](operations.md)：服务状态、容量、离线诊断与故障定位。
 
-当前发行说明：[版本 1.0.0](releases/1.0.0.md)。
+## 开发与参考
 
-工程约定与依赖来源见 [架构说明](architecture.md)，Rust unsafe 结论见 [审查记录](unsafe-audit.md)。
+- [开发与构建](development.md)：工具链、源码构建、测试和归档验证。
+- [服务命令](cli.md)、[运行与管理 API 参考](runtime-reference.md)。
+- [图库 API](gallery-api.md)、[接口消费者](interface-consumers.md)。
+- [架构](architecture.md)、[功能设计参考](feature-inventory-and-tradeoffs.md)、[仓库职责](repository-boundary.md)。
+- [账号设置](account-settings.md)、[公共支撑](common-support.md)、[安全审查](unsafe-audit.md)。
+- [1.0.0 发行记录](releases/1.0.0.md)、[项目首页](../README.md)。
 
-公共支撑的职责、单体依赖、平台边界与验证方法见[公共支撑说明](common-support.md)。
+服务端软件版本和当前数据库身份均为 `1.0.0`，数据库结构修订为 1；它们分别管理。Android/iOS 应用与本地队列属于独立 [xszc 项目](https://github.com/isarmg/xszc)。

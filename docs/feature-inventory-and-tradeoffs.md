@@ -128,7 +128,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 服务端的设备/API key 鉴权、账户隔离、上传续传、图库查询和同步事件形成移动端接口合同。
 两端原生交互、权限、后台调度、队列和恢复校验见 Client 仓库；本仓库只验证服务端协议与数据行为。
-接口消费者与管理员身份边界见[接口与消费者边界](interface-consumers.md)。
+接口消费者与管理员身份边界见[接口与消费者边界](https://github.com/isarmg/xszs/blob/main/docs/interface-consumers.md)。
 
 ## 7. 基于 React/Vite 的管理员 Web
 
@@ -141,7 +141,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-W-005 | 业务 JSON 在进入组件前校验必需字段与类型，路径只允许 `/api/v1/admin/*` | `web/src/api.ts` | 保障 | 中 | 漂移响应会进入组件，或产品 client 被用于移动路由 | 缺失/错误类型、错误 prefix；当前 guard 容忍响应额外字段 |
 | MED-W-006 | xcss 统一 system/light/dark 主题；产品不读写浏览器存储 | Shell 主题选择器 | 可选 | 低 | 私有外观与平台漂移 | 移动明暗主题 WCAG AA、无横向溢出 |
 | MED-W-007 | xcss tokens/reset/accessibility 提供 focus、reduced motion、forced colors 基线 | CSS imports、`data-xcss-scope` | 保障 | 中 | 基础行为跨项目漂移 | keyboard、focus、high contrast、CSS digest |
-| MED-W-008 | 业务 CSS 仅保留 `.media-*` 布局，导航/表单/弹窗/通知来自共享 UI，字体使用 Maple 同源资产 | `src/styles.css`、xcss CSS imports | 建议保留 | 中 | 重复平台样式重新分叉 | 禁止私有字体/token、窄屏、长文本、progress |
+| MED-W-008 | 业务 CSS 仅保留 `.media-*` 布局，导航/表单/弹窗/通知来自共享 UI，字体使用 Maple 同源资产 | `web/src/styles.css`、xcss CSS imports | 建议保留 | 中 | 重复平台样式重新分叉 | 禁止私有字体/token、窄屏、长文本、progress |
 | MED-W-009 | 精确 Node 26.7.0、React/DOM 19.3.0、TS 7.0.2、Vite 8.3.3 | `.node-version`、package/lock | 开发运维 | 中 | 开发、CI 与发行 bundle 不可复现 | engine、`npm ci`、typecheck、版本断言 |
 | MED-W-010 | `build` 强制 check:xcss→typecheck→xcss Vite 配置，512 KiB 单资产硬预算且禁止 source map；完整 dist 资产包含字体与许可 | package scripts、vite config | 开发运维 | 高 | 二进制、字体和发行 manifest 混代 | 构建门禁、实际 dist 浏览器测试 |
 | MED-W-011 | xcss 自动生成内嵌清单绑定 HTML/JS/CSS/WOFF2/许可证；发行只附清单，HTTP 与校验共用 binary 字节，保留 CSP 和 nosniff | `web_assets.rs`、`admin.rs`、`release.rs` | 保障 | 高 | 字体 404、缺少许可证或发布内容漂移 | 全清单实际 HTTP 字节/类型、HEAD/ETag、篡改/重写清单拒绝 |
@@ -210,18 +210,10 @@ Server 在打开状态前验证唯一当前 Schema 和身份。非当前状态�
 
 ## 11. 功能删除检查表
 
-1. 在评审中引用本清单 ID，明确接受的用户后果与数据后果。
-2. 删除所有生产者和消费者：Server、Client、FFI、Android、iOS、Web，不保留隐藏入口。
-3. 涉及持久状态时生成新的完整当前 Schema；产品代码不添加 migration。
-4. 同步本仓库 API DTO、release identity 和协议合同；跨仓库接口变化同时核对 Client 的移动合同。
-5. 删除配置、依赖、权限、systemd/脚本和发行 manifest 条目。
-6. 加入当前合同负例，证明退役入口和字段不再可用。
-7. 同步 README、学习指南、流程树、本清单、运维文档与持久化状态清单。
-
-只有闭包全部完成，功能才算真正删除；配置成 false、隐藏按钮或停止某个平台测试都不能减少其维护责任。
+变更某项能力时，按其 ID 核对 Server、Web、Client 协议、状态、配置和发行材料，记录用户与数据影响，并执行对应的开发和平台验证。
 
 ## 图库接口与派生预览
 
 图库提供类型/日期/设备筛选、UUID 快照水位、资产/资源/标签批量 SQL、1600 像素派生预览，
-以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API](gallery-api.md)。
+以及鉴权 Range/HEAD/ETag 内容读取；具体协议与验证见 [图库 API](https://github.com/isarmg/xszs/blob/main/docs/gallery-api.md)。
 移动端实现和原生平台验证由 Client 仓库维护。
