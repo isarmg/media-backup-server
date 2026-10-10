@@ -6,9 +6,8 @@
 |---|---|---|---|
 | `xcss` | Server | Linux x86_64 / AMD64，GNU libc，`x86_64-unknown-linux-gnu` | 一个 Rust Cargo package |
 | `@xcss/web` | Server 的管理 Web 构建 | 构建机为 Linux x64 / glibc；生成页面由浏览器访问 | 一个 npm 包、一个 `xcss-web-1.0.0.tgz` |
-| `xcsc` | Client，包括升级工具 `xssc` | 按内部模块支持 Linux、Windows、macOS、Android、iOS；产品实际支持以其部署文档和发行附件为准 | 一个 Rust Cargo package |
 
-包名、仓库名、软件版本和内部模块是不同概念。`xcss::log` 或 `xcsc::runtime` 表示同一个包内的模块，不代表一个独立依赖包。版本号使用 `1.0.0`；产品维护的数据合同、UUIDv4、IPv4/IPv6、第三方软件版本及系统 API 名称保持其真实含义。
+包名、仓库名、软件版本和内部模块是不同概念。`xcss::log` 或 `xcss::server_runtime` 表示同一个包内的模块，不代表一个独立依赖包。版本号使用 `1.0.0`；产品维护的数据合同、UUIDv4、IPv4/IPv6、第三方软件版本及系统 API 名称保持其真实含义。
 
 ## 依赖如何固定
 
@@ -38,7 +37,7 @@ cargo tree --locked -e normal
 
 - `npm ci` 按锁文件重新安装精确构建输入，同时校验下载完整性；不能用来源不明的 CSS 或相邻仓库文件替代。
 - `xcss-build-server` 读取 `xcss-web-build.json`，先构建管理 Web，再构建 Linux AMD64 Rust 可执行程序，并校验实际二进制的内嵌资源清单；`--no-install` 复用上一步已经安装的锁定依赖。
-- `cargo tree --locked -e normal` 查看实际运行依赖，确认只有公共包 `xcss`、没有 `xcsc` 或残留的公共子 crate。开发验证依赖通过项目原有测试入口另外检查。
+- `cargo tree --locked -e normal` 查看实际运行依赖，查看公共包 `xcss` 及产品自身运行依赖。开发验证依赖通过项目原有测试入口另外检查。
 
 生成的浏览器页面和内嵌资源属于 Server 产品。运行机器按本项目部署文档安装服务；无需在生产数据目录另装 npm 包或启动公共库服务。
 

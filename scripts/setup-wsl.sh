@@ -160,7 +160,7 @@ expected_identity = {
     "api_version": "v1",
     "storage_encoding": "plain-v1",
     "server_schema_revision": 1,
-    "server_schema_sha256": "5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f",
+    "server_schema_sha256": "0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d",
 }
 expected_directories = {
     "bin", "config", "docs", "scripts", "share", "systemd",

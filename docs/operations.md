@@ -77,7 +77,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 
 浏览器认证合同只有三条：`POST /api/v1/auth/login`、`GET /api/v1/auth/session`、
 `POST /api/v1/auth/logout`。登录 body 精确为 `{username,password}`；登录和 session 成功体精确为
-`{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不能作为客户端登录凭据；它与 `_xcss_administrators.username` 是不同身份域。
+`{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不能作为客户端登录凭据；它与 `_common_administrators.username` 是不同身份域。
 用户管理等业务位于 `/api/v1/admin/*`，移动端仍只使用 `/v1/*`。管理员 username 规范化、严格
 当前 Argon2id、登录准入、Session/CSRF 生命周期、Cookie 和安全审计均由 xcss 的
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
@@ -157,7 +157,7 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 服务端软件版本是 `1.0.0`，但数据库合同独立保持不变：`product_metadata` 必须精确为
 `application=xszs`、`application_version=1.0.0`、
 `schema_revision=1`，Schema SHA-256 为
-`5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f`。移动队列对应
+`0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d`。移动队列对应
 `xszc` 1.0.0、schema revision 1 与 SHA-256
 `87eb55ba9366cd06d5a2e0b69b5fd4c7a6eef59c381e9fd4ea340e9e04ef6dfb`。移动数据库身份由 Client
 仓库定义，不属于 Server 启动时验证的数据库。
@@ -227,7 +227,7 @@ JavaScript 安全整数范围；超出范围时返回结构化错误，不返回
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 xcss `=1.0.0` / `9fb5b3f8f20762cb93050bc52ea81a36ac0dc914`；一个 @xcss/web 包使用
+当前 Server Rust 固定 xcss `=1.0.0` / `9637806055b7d7a18be206f0b83e9b22b73902db`；一个 @xcss/web 包使用
 xcss 1.0.0 正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
 归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web-assets.json`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。
@@ -243,3 +243,11 @@ web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" --mo
 默认资源来自内嵌构建；设置 `XCSS_DEV_WEB_DIR="$PWD/web/dist"` 后可只重建 Web 热更新，或沿用
 `npm run dev --prefix web` 的 Vite 代理。此覆盖仅在未绑定开发构建接受；正式 `run --release-root` 即使用于
 HTTP 实验也拒绝外部 Web。资源 MIME、nosniff、HEAD、SHA-256 ETag 与缓存规则由 xcss 统一实现。
+
+## 当前中立接口与旧版数据处理
+
+当前版本只使用 `.state-instance.lock`、`.state-maintenance.lock`、`.state-maintenance-pending.json` 和 `.state-atomic-` 临时文件前缀；离线升级工具采用 `.release-upgrade` 工作目录。服务身份头为 `x-service`，健康状态中的公共源码修订字段为 `common_revision`。管理会话采用 `__Host-admin-xszs-session`，显式开发模式采用 `admin-xszs-session`；生产 Cookie 的 Secure、HttpOnly、SameSite、Path 和 CSRF 约束继续生效。资源清单格式为 `web-assets-v1`，公共数据库内部表及索引采用 `_common_` 前缀。
+
+这些接口没有旧名称别名或旧版兼容分支。旧版升级前，先按本文的停服步骤停止服务、配套客户端及全部维护工具；确认全部进程退出后，完整备份配置、SQLite 数据库及其 WAL/SHM、业务文件和必要的私有凭据。备份包含敏感数据，应保留原有访问权限并离线保存。
+
+保留旧数据目录，按当前安装步骤配置新的私有数据目录，执行显式 `init` 初始化，随后运行 `config validate`，再启动服务、登录管理页面并重新配对客户端。旧配置应人工审阅后填写当前字段，不能整体覆盖新目录。旧业务数据需要另行处理；当前版本不提供自动迁移。不得让旧、新版本同时写同一目录，不得通过删锁文件或修改数据库 metadata 强制启动；当前结构指纹包含实际表名、索引名和 SQL，仅改名称不能证明数据符合当前合同。

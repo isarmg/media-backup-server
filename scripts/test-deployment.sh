@@ -79,7 +79,7 @@ assert identity["target"] == "x86_64-unknown-linux-gnu"
 assert identity["api_version"] == "v1"
 assert identity["storage_encoding"] == "plain-v1"
 assert identity["server_schema_revision"] == 1
-assert identity["server_schema_sha256"] == "5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f"
+assert identity["server_schema_sha256"] == "0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d"
 PY
 contract="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["release_contract_sha256"])' "$identity_file")"
 source_revision="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source_revision"])' "$identity_file")"
@@ -101,7 +101,7 @@ import hashlib,json,sys
 from pathlib import Path
 raw=Path(sys.argv[1]).read_bytes(); manifest=json.loads(raw); identity=json.load(open(sys.argv[2]))
 assert hashlib.sha256(raw).hexdigest()==identity['web_assets_sha256']
-assert manifest['format']=='xcss-web-assets-v1'
+assert manifest['format']=='web-assets-v1'
 paths=[entry['path'] for entry in manifest['files']]
 assert paths==sorted(set(paths))
 assert {'index.html','assets/admin.js','assets/admin.css','assets/MapleMono-OFL.txt','assets/CJK-LICENSE.txt'}<=set(paths)

@@ -164,7 +164,7 @@ fn explicit_initialization_read_only_diagnostics_and_real_readiness() {
         initialized_state,
         "offline status changed state"
     );
-    let pending = data.join(".xcss-maintenance-pending.json");
+    let pending = data.join(".state-maintenance-pending.json");
     fs::write(&pending, b"{}").unwrap();
     fs::set_permissions(&pending, fs::Permissions::from_mode(0o600)).unwrap();
     let pending_state = state(&data);

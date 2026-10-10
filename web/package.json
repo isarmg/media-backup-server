@@ -13,10 +13,7 @@
     "check:xcss": "node tests/xcss-baseline.test.mjs",
     "build": "npm run check:xcss && npm run typecheck && vite build",
     "test:browser": "npm run build && node tests/browser-acceptance.mjs",
-    "build:server": "xcss-build-server --config ../xcss-web-build.json --mode development",
-    "apply:xcss-patches": "node scripts/apply-xcss-patches.mjs",
-    "prebuild": "npm run apply:xcss-patches",
-    "predev": "npm run apply:xcss-patches"
+    "build:server": "xcss-build-server --config ../xcss-web-build.json --mode development"
   },
   "dependencies": {
     "@xcss/web": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-web-1.0.0.tgz",

@@ -4,7 +4,7 @@ product_id = "xszs"
 [foundation]
 platform_generation = 1
 version = "1.0.0"
-git_rev = "9fb5b3f8f20762cb93050bc52ea81a36ac0dc914"
+git_rev = "9637806055b7d7a18be206f0b83e9b22b73902db"
 
 [[components]]
 id = "server"

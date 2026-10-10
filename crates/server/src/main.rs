@@ -271,7 +271,7 @@ async fn execute(mut cli: Cli) -> Result<()> {
         xcss::server_runtime::ServerRuntime::builder(xcss::server_runtime::ProductDescriptor {
             id: "xszs".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            xcss_revision: env!("XCSS_REVISION").into(),
+            common_revision: env!("XCSS_REVISION").into(),
             profile: "server-control-plane".into(),
             capabilities: vec![
                 "embedded-web".into(),

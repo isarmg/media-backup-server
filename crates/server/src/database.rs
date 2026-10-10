@@ -20,7 +20,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 const CURRENT_SCHEMA: &str = include_str!("../../../schema/generated/current_schema.sql");
 pub(crate) const CURRENT_SCHEMA_REVISION: i64 = 1;
 pub(crate) const CURRENT_SCHEMA_SHA256: &str =
-    "5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f";
+    "0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d";
 
 #[cfg(test)]
 pub(crate) async fn connect(database_url: &str) -> anyhow::Result<SqlitePool> {
@@ -209,7 +209,7 @@ fn initialize_current_database(path: &Path) -> anyhow::Result<()> {
             harden_connection(&mut connection).await?;
             let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
             sqlx::raw_sql(CURRENT_SCHEMA).execute(&mut *transaction).await?;
-            sqlx::query("INSERT INTO _xcss_platform_metadata(singleton,platform_generation,platform_schema_revision,profile,created_at_micros) VALUES(1,1,1,'server-control-plane',?)")
+            sqlx::query("INSERT INTO _common_platform_metadata(singleton,platform_generation,platform_schema_revision,profile,created_at_micros) VALUES(1,1,1,'server-control-plane',?)")
                 .bind(0_i64).execute(&mut *transaction).await?;
             let actual = xcss::sqlite::schema_fingerprint(&mut *transaction).await?;
             ensure!(actual == CURRENT_SCHEMA_SHA256, "compiled current schema fingerprint mismatch");
@@ -452,7 +452,7 @@ mod tests {
             .await
             .unwrap();
         sqlx::query(
-            "INSERT INTO _xcss_platform_metadata(\
+            "INSERT INTO _common_platform_metadata(\
                  singleton,platform_generation,platform_schema_revision,profile,created_at_micros\
                  ) VALUES(1,1,1,'server-control-plane',?)",
         )

@@ -14,7 +14,7 @@
 
 领域按 config / lifecycle / administration / media / upload / storage 划分。`routes.rs` 与 `admin.rs` 执行入口授权，`library.rs` 管理媒体语义，`upload_commit.rs` 管理持久提交与恢复，`storage.rs` / `rooted_fs.rs` 管理实际文件边界，`database.rs` 管理当前 Schema。 `main.rs` 组合配置、初始化、运行与停止；入口不重新实现 xcss 机制。
 
-软件身份来自 Cargo，发行配置须与其一致；业务协议来自 `crates/protocol/`，当前 DDL 来自 `schema/`。当前 Schema revision/指纹为 1、`5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f`，此次保持不变。Rust 与 Web xcss 使用已发布的完整 Git revision、精确版本或具备完整性摘要的发行包，不依赖同级源码作为正式构建输入。候选 xcss 联调只能作为明确记录的临时覆盖，不能伪装成已发布依赖。
+软件身份来自 Cargo，发行配置须与其一致；业务协议来自 `crates/protocol/`，当前 DDL 来自 `schema/`。当前 Schema revision/指纹为 1、`0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d`，此次保持不变。Rust 与 Web xcss 使用已发布的完整 Git revision、精确版本或具备完整性摘要的发行包，不依赖同级源码作为正式构建输入。候选 xcss 联调只能作为明确记录的临时覆盖，不能伪装成已发布依赖。
 
 ## 运行与安全边界
 

@@ -166,7 +166,7 @@ async fn test_router(state: AppState) -> Router {
         xcss::server_runtime::ServerRuntime::builder(xcss::server_runtime::ProductDescriptor {
             id: "xszs".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            xcss_revision: env!("XCSS_REVISION").into(),
+            common_revision: env!("XCSS_REVISION").into(),
             profile: "server-control-plane".into(),
             capabilities: vec![
                 "embedded-web".into(),
@@ -383,7 +383,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
     let mutation_tables = [
         "accounts",
         "devices",
-        "_xcss_admin_sessions",
+        "_common_admin_sessions",
         "assets",
         "uploads",
         "upload_parts",
@@ -510,7 +510,7 @@ async fn v02_wire_is_strict_across_the_real_sqlite_file_flow_and_restart() {
     assert_eq!(administrator_session["username"], ADMIN_USERNAME);
     assert_eq!(administrator_session["role"], "admin");
     let administrator_id: String =
-        sqlx::query_scalar("SELECT administrator_id FROM _xcss_administrators")
+        sqlx::query_scalar("SELECT administrator_id FROM _common_administrators")
             .fetch_one(&pool)
             .await
             .expect("persisted administrator id");

@@ -1,9 +1,9 @@
-# Source provenance
+# 源码来源
 
-This independent xszs repository was extracted from the source repository now named xszc at commit
-`c604f70b6f08a1d316a6f4df5a974a752690486e`.
-The original repository and history now belong to `https://github.com/isarmg/xszc`.
-The original Android signing environment stays there; no signing private key or GitHub Secret was copied.
-This repository owns the Server runtime, Server administration Web and canonical product protocol.
+独立的 `xszs` 仓库从现名为 `xszc` 的源码仓库中提取，提取时的提交为
+`c604f70b6f08a1d316a6f4df5a974a752690486e`。
+原仓库及其历史归属于 [xszc](https://github.com/isarmg/xszc)。
+原有 Android 签名环境仍保留在该仓库，没有复制签名私钥或 GitHub Secret。
+本仓库负责服务端运行程序、服务端管理 Web 和产品协议的权威定义。
 
 名称已规范，历史版本/提交/验收状态不变，非当前验收证据。

@@ -13,7 +13,7 @@ CREATE TABLE product_metadata (
 
 
 -- platform metadata
-CREATE TABLE _xcss_platform_metadata (
+CREATE TABLE _common_platform_metadata (
     singleton                INTEGER PRIMARY KEY
                                       CHECK (singleton = 1),
     platform_generation      INTEGER NOT NULL
@@ -27,7 +27,7 @@ CREATE TABLE _xcss_platform_metadata (
 
 
 -- capability: admin-persistent
-CREATE TABLE _xcss_administrators (
+CREATE TABLE _common_administrators (
     administrator_id TEXT PRIMARY KEY
                           CHECK (length(administrator_id) BETWEEN 1 AND 64),
     username TEXT NOT NULL UNIQUE
@@ -51,11 +51,11 @@ CREATE TABLE _xcss_administrators (
     last_login_at_micros INTEGER
 );
 
-CREATE TABLE _xcss_admin_sessions (
+CREATE TABLE _common_admin_sessions (
     session_id TEXT PRIMARY KEY
                     CHECK (length(session_id) BETWEEN 1 AND 64),
     administrator_id TEXT NOT NULL
-                          REFERENCES _xcss_administrators(administrator_id)
+                          REFERENCES _common_administrators(administrator_id)
                           ON DELETE RESTRICT,
     token_hash BLOB NOT NULL UNIQUE
                     CHECK (length(token_hash) = 32),
@@ -77,7 +77,7 @@ CREATE TABLE _xcss_admin_sessions (
     )
 );
 
-CREATE TABLE _xcss_security_audit_events (
+CREATE TABLE _common_security_audit_events (
     event_id TEXT PRIMARY KEY,
     action TEXT NOT NULL,
     outcome TEXT NOT NULL
@@ -267,14 +267,14 @@ CREATE TABLE audit_events (
 
 
 -- capability: admin-persistent
-CREATE INDEX _xcss_admin_sessions_administrator_idx
-    ON _xcss_admin_sessions(
+CREATE INDEX _common_admin_sessions_administrator_idx
+    ON _common_admin_sessions(
         administrator_id,
         revoked_at_micros
     );
 
-CREATE INDEX _xcss_admin_sessions_expiry_idx
-    ON _xcss_admin_sessions(
+CREATE INDEX _common_admin_sessions_expiry_idx
+    ON _common_admin_sessions(
         idle_expires_at_micros,
         absolute_expires_at_micros
     )

@@ -26,8 +26,8 @@
 
 ### 1.3 两类“用户”和两类 `role`
 
-控制面只有 Administrator。`_xcss_administrators` 表不保存 `role`，Administrator Session 的 `role:"admin"` 是
-xcss wire 常量；其身份键是 `_xcss_administrators.username`。`accounts` 只是照片/视频归属的数据面
+控制面只有 Administrator。`_common_administrators` 表不保存 `role`，Administrator Session 的 `role:"admin"` 是
+xcss wire 常量；其身份键是 `_common_administrators.username`。`accounts` 只是照片/视频归属的数据面
 租户，不是低权限管理员，也不是客户端登录身份。管理员 username 即使与租户名称文字相同也不会关联。上传
 `resources.role` 表示同一资产内的资源用途，例如 `primary` 或 `thumbnail`，也不是权限角色。删除或改名
 任一概念时必须保持这三个命名空间彼此独立。
@@ -55,7 +55,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-A-001 | 控制面只有 Administrator，平台表由 xcss Composer 生成 | `_xcss_administrators`、Admin Core | 核心 | 高 | 删除认证会公开备份实例与路径 | Session 固定 admin；无产品管理员表 |
+| MED-A-001 | 控制面只有 Administrator，平台表由 xcss Composer 生成 | `_common_administrators`、Admin Core | 核心 | 高 | 删除认证会公开备份实例与路径 | Session 固定 admin；无产品管理员表 |
 | MED-A-002 | 仅无管理员时使用 BOOTSTRAP_ADMIN_USERNAME/PASSWORD 初始化；已有身份不被环境覆盖 | `build_state`、Admin Core | 保障 | 高 | 环境变量不能隐式重置账户 | 空库要求密码；已有管理员保持不变 |
 | MED-A-003 | Administrator username 使用 xcss 唯一 canonical 规则：登录 candidate 1..64 printable ASCII，经 trim ASCII + lowercase 后必须为 3..64 bytes、首尾字母数字、字符仅 `[a-z0-9._-]` | `normalize_administrator_username`、`require_canonical_administrator_username`、Schema CHECK | 保障 | 中 | 同一身份可用大小写/空白变体绕过限流或唯一约束，跨项目身份语义会漂移 | 大小写/首尾空白正例；`@`、Unicode、内部空白、控制字符、首尾分隔符和超长负例 |
 | MED-A-004 | 管理员密码只接受 xcss 当前 Argon2id 策略 | Admin Core、Admin Auth | 保障 | 高 | 产品不能另设 hash 分支 | PHC 参数与口令策略负例 |
@@ -63,12 +63,12 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 | MED-A-006 | 登录 body 精确 username/password，Session 使用平台五字段合同 | xcss Axum Adapter、Contracts | 保障 | 中 | 产品不能重解释认证结果 | strict DTO、401/403、ErrorEnvelope |
 | MED-A-007 | 管理员登录来源为真实 socket peer；固定来源/账户失败预算和 Argon2 并发等待上限 | xcss Admin Core | 保障 | 高 | 不能信任代理来源头或绕过平台预算 | 共享 Adapter 套件 |
 | MED-A-008 | 未知账户执行当前 dummy hash | xcss Admin Core | 保障 | 中 | 避免账户存在性时序差异 | dummy verification 测试 |
-| MED-A-009 | 管理 Session/CSRF token 只以摘要存储 | xcss Admin SQLite | 保障 | 高 | 产品不得另存明文 token | `_xcss_admin_sessions` 当前 DDL |
+| MED-A-009 | 管理 Session/CSRF token 只以摘要存储 | xcss Admin SQLite | 保障 | 高 | 产品不得另存明文 token | `_common_admin_sessions` 当前 DDL |
 | MED-A-010 | 固定每管理员 32、全局 1024 Session，空闲 30 分钟、绝对 12 小时 | xcss Admin Policy | 保障 | 高 | 无产品 TTL 配置或分叉限额 | 过期、上限、last_seen 写入节流 |
 | MED-A-011 | 恢复 Session 轮换当前 CSRF 摘要，客户端协调并发认证请求 | xcss Admin Core、admin-web | 保障 | 中 | 不保留产品历史 CSRF 窗口 | 恢复、失效旧 token、并发客户端测试 |
 | MED-A-012 | 写管理请求要求单个 CSRF、同源 Origin 与单一 Host/URI authority | xcss Axum Adapter | 保障 | 高 | 禁止跨站和重复头歧义 | 共享 Axum/Hyper 套件 |
-| MED-A-013 | 生产 Cookie 为 __Host-xcss-xszs-session，Secure/HttpOnly/SameSite=Strict/Path=/ | xcss session_set_cookie | 保障 | 低 | 不提供产品 Cookie 别名 | 精确属性与 loopback 开发模式 |
-| MED-A-015 | 数据面 accounts 与管理面 _xcss_administrators 完全分离 | 产品移动授权、xcss 管理授权 | 核心 | 高 | 同名账户不共享凭据或权限 | 移动 /v1 与管理 /api/v1 分域 |
+| MED-A-013 | 生产 Cookie 为 __Host-admin-xszs-session，Secure/HttpOnly/SameSite=Strict/Path=/ | xcss session_set_cookie | 保障 | 低 | 不提供产品 Cookie 别名 | 精确属性与 loopback 开发模式 |
+| MED-A-015 | 数据面 accounts 与管理面 _common_administrators 完全分离 | 产品移动授权、xcss 管理授权 | 核心 | 高 | 同名账户不共享凭据或权限 | 移动 /v1 与管理 /api/v1 分域 |
 | MED-A-016 | 管理员通过 `/api/v1/admin/instances` 直接创建默认名称实例；Server 在同一事务中创建自动分配的永久启用内部 account 隔离边界、100 GiB 默认配额、device 和 36 位小写英文字母数字长期授权码，不暴露“先建用户再建实例”的流程。授权码保存为经实例 ID 绑定的信封密文和独立摘要；bootstrap 仍只接受待配对授权码并签发随机 Bearer token，轮换立即清除旧 token | `routes::bootstrap`、`admin.rs`、`crypto.rs`、`accounts`、`devices` | 核心 | 高 | 手机无法获得稳定设备身份；部分创建会留下孤立归属；明文库泄漏扩大 | strict optional-name DTO、默认值、原子创建、正误授权码、取消/删除、轮换、token digest、设备 audit |
 | MED-A-017 | 移动业务 API 只接受已配对设备的 device token 或未撤销 API Key，解析到同一 account/device context；轮换或撤销实例同步撤销其 API Key | `auth::require_auth` | 核心 | 高 | 旧凭据可能在实例撤销后继续访问，或两个 token 类型产生不同隔离语义 | device/API key、revoked、disabled、跨账户 |
 | MED-A-018 | API Key 原值只在创建响应出现一次，库中存 hash/prefix，可列出和撤销 | `api_access.rs`、`api_keys` | 建议保留 | 高 | 自动化/额外客户端只能保存设备 token；明文保存会泄漏 | 创建、列表不含 token、撤销、last_used |
@@ -130,7 +130,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 两端原生交互、权限、后台调度、队列和恢复校验见 Client 仓库；本仓库只验证服务端协议与数据行为。
 接口消费者与管理员身份边界见[接口与消费者边界](interface-consumers.md)。
 
-## 7. React/Vite Administrator Web
+## 7. 基于 React/Vite 的管理员 Web
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
@@ -150,7 +150,7 @@ React 管理页、配置与 systemd、发行 identity/manifest、CI/脚本、正
 
 | ID | 当前功能/特性与真实行为 | 实现/代码锚点 | 分类 | 复杂度 | 删除后的确定后果 | 最低验证/边界 |
 |---|---|---|---|---|---|---|
-| MED-R-001 | Server 软件为 1.0.0，数据库 Schema identity 为 xszs 1.0.0、revision 1、SHA `5b2049d51d0532c51e2fd520fa321d8d7c7964813aa9014087f573bd395d8d6f`；管理员和平台 DDL 由 xcss 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
+| MED-R-001 | Server 软件为 1.0.0，数据库 Schema identity 为 xszs 1.0.0、revision 1、SHA `0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d`；管理员和平台 DDL 由 xcss 组合 | `database.rs`、`schema/generated/current_schema.sql` | 保障 | 高 | 错库或 DDL drift 必须拒绝 | metadata、现场 fingerprint、当前身份精确校验 |
 | MED-R-003 | Server 数据库先复制 main/WAL/journal 私有 generation，再验证 source 未变化 | `crates/server/src/database.rs` | 保障 | 高 | 启动验证可能读取跨时刻混合状态或写源库 | WAL、并发变化、symlink、cleanup |
 | MED-R-004 | Server open 使用 WAL、foreign keys、busy timeout，并在业务前做 integrity/FK | `database.rs`、doctor | 保障 | 高 | 并发/损坏行为变得不可预测 | PRAGMA、busy 5s、corruption、FK violation |
 | MED-R-005 | runtime lock 同时绑定数据库与 DATA_DIR，防止两个 Server 管同一状态 | `runtime_lock.rs` | 保障 | 高 | 双实例可同时提交、清理和改账户路径 | 同 DB/不同 data、同 data/不同 DB、symlink/hardlink |
