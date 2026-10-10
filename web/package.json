@@ -16,7 +16,7 @@
     "build:server": "xcss-build-server --config ../xcss-web-build.json --mode development"
   },
   "dependencies": {
-    "@xcss/web": "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-web-1.0.0.tgz",
+    "@xcss/web": "https://github.com/isarmg/xcss/releases/download/v1.0.1/xcss-web-1.0.1.tgz",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
