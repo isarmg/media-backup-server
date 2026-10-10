@@ -1,4 +1,4 @@
-# Media Backup 运维文档
+# xszs 运维文档
 
 ## 1. 生产拓扑与前置条件
 
@@ -6,7 +6,7 @@
 Caddy/Nginx。`aarch64` 主机、非 Linux 主机和非 GNU Rust target 都会失败关闭，不存在交叉架构 fallback：
 
 ```text
-Internet -> HTTPS reverse proxy -> 127.0.0.1:8080 Media Backup
+Internet -> HTTPS reverse proxy -> 127.0.0.1:8080 xszs
                                       ├─ SQLite /var/lib/isarmg/xszs/db/app.db
                                       └─ media  /var/lib/isarmg/xszs/data
 ```
@@ -20,7 +20,7 @@ Internet -> HTTPS reverse proxy -> 127.0.0.1:8080 Media Backup
 ```bash
 revision="$(git rev-parse HEAD)"
 npm ci --prefix web
-web/node_modules/.bin/xcss-build-server --config "$PWD/foundation-web-build.json" \
+web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" \
   --mode release --no-install --source-revision "$revision"
 mkdir -p "$PWD/dist"
 ./scripts/build-server-release.sh \
@@ -49,14 +49,14 @@ cd xszs-1.0.0-x86_64-unknown-linux-gnu
 ./bin/xszs release-verify "$PWD"
 sudo ./scripts/setup-wsl.sh
 sudoedit /etc/isarmg/xszs.env
-sudo systemd-run --wait --collect -p User=ixcss-media -p Group=ixcss-media -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
+sudo systemd-run --wait --collect -p User=xszs -p Group=xszs -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
 sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
 ```
 
 安装只允许创建缺失的 `/opt/isarmg/xszs/releases/1.0.0`，不会覆盖或复用。同版本重装应先按
 运维变更流程处理现有部署，而不是绕过 no-clobber。环境文件首次以 `0600` 排他创建；替换自动生成的
 `BOOTSTRAP_ADMIN_USERNAME`、`BOOTSTRAP_ADMIN_PASSWORD`、`XSZS_CREDENTIALS_KEY`、`METRICS_TOKEN` 并删除初始化标记后才能启动。登录候选 username
-必须是 1–64 bytes 的可打印 ASCII；Foundation 会去除首尾 ASCII whitespace、转为 ASCII 小写，再要求
+必须是 1–64 bytes 的可打印 ASCII；xcss 会去除首尾 ASCII whitespace、转为 ASCII 小写，再要求
 canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9._-]`，因此 `@`、Unicode、内部空白、
 首尾分隔符都被拒绝。持久化和 Session 只接受已经 canonical 的值；`ADMIN_EMAIL` 不是配置别名。
 
@@ -67,7 +67,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 | `DATABASE_URL` | 当前 SQLite 路径 | 与媒体目录分离，路径父链不可是链接 |
 | `DATA_DIR` | 原始媒体、缩略图和临时分块根 | 独立容量与 inode 监控 |
 | `BIND` | HTTP 监听地址 | 推荐 `127.0.0.1:8080` |
-| `BOOTSTRAP_ADMIN_USERNAME` | 无管理员时创建的初始管理员 username | 默认 admin；按 Foundation 规则规范化；已有管理员时不创建或覆盖身份 |
+| `BOOTSTRAP_ADMIN_USERNAME` | 无管理员时创建的初始管理员 username | 默认 admin；按 xcss 规则规范化；已有管理员时不创建或覆盖身份 |
 | `BOOTSTRAP_ADMIN_PASSWORD` | 初始管理员密码 | 仅无管理员时必填；已有管理员时不重置密码；生产由秘密管理器生成 |
 | `XSZS_CREDENTIALS_KEY` | 实例授权码信封加密主密钥 | 必填；Base64 解码后必须为 32 bytes，必须持久化并由秘密管理器保存 |
 | `REQUIRE_HTTPS` | 强制可信 HTTPS 语义 | 必须为 `true` |
@@ -79,7 +79,7 @@ canonical 值为 3–64 bytes、首尾字母数字且全部字符仅为 `[a-z0-9
 `POST /api/v1/auth/logout`。登录 body 精确为 `{username,password}`；登录和 session 成功体精确为
 `{authenticated:true,user_id,username,role:"admin",csrf_token}`。备份账户的 `accounts.username` 只用于管理员识别存储租户，不能作为客户端登录凭据；它与 `_xcss_administrators.username` 是不同身份域。
 用户管理等业务位于 `/api/v1/admin/*`，移动端仍只使用 `/v1/*`。管理员 username 规范化、严格
-当前 Argon2id、登录准入、Session/CSRF 生命周期、Cookie 和安全审计均由 Foundation 的
+当前 Argon2id、登录准入、Session/CSRF 生命周期、Cookie 和安全审计均由 xcss 的
 Admin Core、SQLite Store、Axum Adapter 拥有。空闲 30 分钟、绝对 12 小时、每管理员 32 个/全局 1024 个
 Session 是固定平台策略，不提供产品级 TTL 配置。管理员登录来源使用真实 socket peer，不信任转发来源头。
 
@@ -191,20 +191,20 @@ blob rooted unlink/删行及 committed/orphan staging 清理，但不会周期�
 证据和摘要，再轮换管理员密码、设备 Token、API Key、指标 Token、TLS 私钥及可能泄露的主机凭据。
 安全修复只面向当前版本。
 
-## 11. 管理 Web 与 Foundation 门禁
+## 11. 管理 Web 与 xcss 门禁
 
-管理 Web 必须使用 `.node-version` 指定的 Node `26.7.0`。Foundation 是构建期依赖；生产机不安装 npm
-包，不访问 Foundation 仓库、registry 或 CDN。`build` 自带 `check:foundation` 前置门禁，因此正式顺序为：
+管理 Web 必须使用 `.node-version` 指定的 Node `26.7.0`。xcss 是构建期依赖；生产机不安装 npm
+包，不访问 xcss 仓库、registry 或 CDN。`build` 自带 `check:xcss` 前置门禁，因此正式顺序为：
 
 ```bash
 npm ci --prefix web
-web/node_modules/.bin/xcss-build-server --config "$PWD/foundation-web-build.json" --mode release --no-install
+web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" --mode release --no-install
 ```
 
-门禁直接调用 Foundation `assertXcssWebToolchain`，验证精确工具链及依赖/lockfile，并拒绝产品自有
+门禁直接调用 xcss `assertXcssWebToolchain`，验证精确工具链及依赖/lockfile，并拒绝产品自有
 登录外壳、存储凭据及私有字体/token 定义。管理页面使用共享 Shell/UI、认证客户端和 Maple 字体。
 Vite 生成 HTML、JS、CSS、两个首屏 WOFF2、按需 CJK 分片与字体许可证；服务端的唯一内嵌资产清单同时用于
-HTTP 响应和发行身份校验。Foundation 根据本次 dist 自动生成 inventory，并将快照内嵌到 binary；
+HTTP 响应和发行身份校验。xcss 根据本次 dist 自动生成 inventory，并将快照内嵌到 binary；
 发行包只带 `share/web-assets.json`，不重复携带 Web 原始字节。清单必须精确等于 executable 输出，
 单独重写发行 manifest 不能授权其他清单。字体经同源 `/admin/assets/` 路由
 提供，类型为 `font/woff2`，不访问 CDN。必须先构建 Web，再构建 Server。
@@ -212,7 +212,7 @@ HTTP 响应和发行身份校验。Foundation 根据本次 dist 自动生成 inv
 管理端只呈现“备份实例”：点击新建后 `POST /api/v1/admin/instances` 使用默认名称，并在同一数据库事务中创建自动分配的
 内部存储归属、100 GiB 默认配额、客户端实例和长期授权码；路径和配额可在详情页调整，不要求管理员先创建业务用户。
 内部 `accounts` 仅作为上传数据的隔离与配额边界，不是登录身份，也不会在产品页面暴露账号或密码。当前管理员只能
-从右上角人物图标进入 Foundation 账户设置。实例创建后永久启用；写请求失败不会自动重放，界面仅显示安全错误和
+从右上角人物图标进入 xcss 账户设置。实例创建后永久启用；写请求失败不会自动重放，界面仅显示安全错误和
 Request ID。
 
 管理 API 的单实例配额范围为 0～9007199254740991 bytes（0 表示不限）。概览容量合计也必须处于
@@ -227,8 +227,8 @@ JavaScript 安全整数范围；超出范围时返回结构化错误，不返回
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 Foundation `=1.0.0` / `d58b9ef0822984ee0d29fb8b8139cfd2787374fb`；八个 Web 包使用
-Foundation 1.0.0 正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
+当前 Server Rust 固定 xcss `=1.0.0` / `9fb5b3f8f20762cb93050bc52ea81a36ac0dc914`；一个 @xcss/web 包使用
+xcss 1.0.0 正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
 归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web-assets.json`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。
 
@@ -236,10 +236,10 @@ Foundation 1.0.0 正式 Release tarball 与 lockfile integrity，不依赖相邻
 
 ```bash
 npm ci --prefix web
-web/node_modules/.bin/xcss-build-server --config "$PWD/foundation-web-build.json" --mode development --no-install
+web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" --mode development --no-install
 ```
 
 设置实验配置和 `DEVELOPMENT=true`、回环 `BIND` 后运行 `target/x86_64-unknown-linux-gnu/debug/xszs run`。
 默认资源来自内嵌构建；设置 `XCSS_DEV_WEB_DIR="$PWD/web/dist"` 后可只重建 Web 热更新，或沿用
 `npm run dev --prefix web` 的 Vite 代理。此覆盖仅在未绑定开发构建接受；正式 `run --release-root` 即使用于
-HTTP 实验也拒绝外部 Web。资源 MIME、nosniff、HEAD、SHA-256 ETag 与缓存规则由 Foundation 统一实现。
+HTTP 实验也拒绝外部 Web。资源 MIME、nosniff、HEAD、SHA-256 ETag 与缓存规则由 xcss 统一实现。

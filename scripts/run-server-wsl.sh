@@ -25,7 +25,7 @@ verify_installed_release() {
     mode="$(stat -c '%a' -- "$directory")"
     (( (8#$mode & 0022) == 0 )) || fail "release directory is group/other writable: $directory"
   done
-  [[ -x "$binary" ]] || fail "missing installed Media Backup server binary"
+  [[ -x "$binary" ]] || fail "missing installed xszs server binary"
   output="$("$binary" release-verify-installed "$release")" ||
     fail "installed release manifest, identity, or payload verification failed"
   [[ "$output" != *$'\n'* ]] || fail "release verifier returned multiple lines"

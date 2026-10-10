@@ -9,7 +9,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use sqlx::Row;
 use uuid::Uuid;
-use xcss_server_cli::{ContractJson, ContractPath, ContractQuery};
+use xcss::server_cli::{ContractJson, ContractPath, ContractQuery};
 use xszs_protocol::{
     ApiKeyCreated, ApiKeyRecord, AuditEvent, AuditPage, CreateApiKeyRequest, EmptyRequest,
 };

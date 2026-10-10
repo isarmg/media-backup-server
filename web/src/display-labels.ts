@@ -1,4 +1,4 @@
-import { getLocale, t } from "@xcss/admin-ui/i18n";
+import { getLocale, t } from "@xcss/web/admin-ui/i18n";
 
 const pairing: Record<string, readonly [string, string]> = {
   pending: ["待配对", "Awaiting pairing"], paired: ["已配对", "Paired"],

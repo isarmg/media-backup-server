@@ -56,7 +56,7 @@ impl RuntimeLock {
                 Mode::empty(),
                 resolve,
             )
-            .with_context(|| "open Media Backup runtime lock parent without following links")?;
+            .with_context(|| "open xszs runtime lock parent without following links")?;
             let initial_resource = match statat(
                 &parent_fd,
                 &location.resource_name,
@@ -66,12 +66,12 @@ impl RuntimeLock {
                     let actual = FileType::from_raw_mode(metadata.st_mode);
                     ensure!(
                         actual == location.kind.file_type(),
-                        "Media Backup runtime resource is a symbolic link or has the wrong type"
+                        "xszs runtime resource is a symbolic link or has the wrong type"
                     );
                     if actual == FileType::RegularFile {
                         ensure!(
                             metadata.st_nlink == 1,
-                            "Media Backup SQLite resource has multiple hard links"
+                            "xszs SQLite resource has multiple hard links"
                         );
                     }
                     Some((metadata.st_dev, metadata.st_ino))
@@ -79,7 +79,7 @@ impl RuntimeLock {
                 Err(Errno::NOENT) => None,
                 Err(error) => {
                     return Err(std::io::Error::from(error))
-                        .context("inspect Media Backup runtime resource");
+                        .context("inspect xszs runtime resource");
                 }
             };
             let parent_metadata = fstat(&parent_fd)?;
@@ -90,7 +90,7 @@ impl RuntimeLock {
                 Mode::from_raw_mode(0o600),
                 resolve,
             )
-            .with_context(|| "open Media Backup runtime lock")?;
+            .with_context(|| "open xszs runtime lock")?;
             let metadata = fstat(&fd)?;
             ensure!(
                 FileType::from_raw_mode(metadata.st_mode) == FileType::RegularFile
@@ -100,10 +100,10 @@ impl RuntimeLock {
             match flock(&fd, FlockOperation::NonBlockingLockExclusive) {
                 Ok(()) => files.push(File::from(fd)),
                 Err(Errno::WOULDBLOCK) => {
-                    anyhow::bail!("Media Backup service or diagnostic command is already running")
+                    anyhow::bail!("xszs service or diagnostic command is already running")
                 }
                 Err(error) => {
-                    return Err(std::io::Error::from(error)).context("lock Media Backup runtime");
+                    return Err(std::io::Error::from(error)).context("lock xszs runtime");
                 }
             }
             locked_locations.push(LockedLocation {
@@ -144,7 +144,7 @@ impl RuntimeLock {
             ensure!(
                 original_parent.is_dir()
                     && (original_parent.dev(), original_parent.ino()) == location.parent_identity,
-                "Media Backup runtime resource parent changed after acquiring its lock"
+                "xszs runtime resource parent changed after acquiring its lock"
             );
             let original_path = location.original_parent.join(&location.resource_name);
             let anchored = statat(
@@ -161,12 +161,12 @@ impl RuntimeLock {
                             && location.resource_identity.is_none_or(
                                 |identity| identity == (anchored.st_dev, anchored.st_ino)
                             ),
-                        "Media Backup runtime resource identity changed after acquiring its lock"
+                        "xszs runtime resource identity changed after acquiring its lock"
                     );
                     if matches!(location.kind, ResourceKind::RegularFile) {
                         ensure!(
                             anchored.st_nlink == 1,
-                            "Media Backup SQLite resource has multiple hard links"
+                            "xszs SQLite resource has multiple hard links"
                         );
                     }
                 }
@@ -174,7 +174,7 @@ impl RuntimeLock {
                     if original.kind() == std::io::ErrorKind::NotFound
                         && location.resource_identity.is_none() => {}
                 _ => {
-                    anyhow::bail!("Media Backup runtime resource changed after acquiring its lock")
+                    anyhow::bail!("xszs runtime resource changed after acquiring its lock")
                 }
             }
         }
@@ -186,13 +186,13 @@ impl RuntimeLock {
 impl RuntimeLock {
     pub(crate) fn acquire(database_url: &str, _data_dir: &Path) -> anyhow::Result<Self> {
         sqlite_database_path(database_url)?;
-        anyhow::bail!("secure Media Backup runtime locking requires Linux openat2")
+        anyhow::bail!("secure xszs runtime locking requires Linux openat2")
     }
     pub(crate) fn database_url(&self) -> anyhow::Result<String> {
-        anyhow::bail!("secure Media Backup runtime locking requires Linux openat2")
+        anyhow::bail!("secure xszs runtime locking requires Linux openat2")
     }
     pub(crate) fn verify_original_paths(&self) -> anyhow::Result<()> {
-        anyhow::bail!("secure Media Backup runtime locking requires Linux openat2")
+        anyhow::bail!("secure xszs runtime locking requires Linux openat2")
     }
 }
 
@@ -279,11 +279,11 @@ pub(crate) fn sqlite_database_path(database_url: &str) -> anyhow::Result<PathBuf
         .context("DATABASE_URL must use the sqlite scheme")?;
     ensure!(
         !value.is_empty() && value != ":memory:",
-        "Media Backup requires a file SQLite database"
+        "xszs requires a file SQLite database"
     );
     ensure!(
         !value.contains(['?', '#', '%', '\0']),
-        "Media Backup requires a plain unescaped SQLite file URL"
+        "xszs requires a plain unescaped SQLite file URL"
     );
     let path = PathBuf::from(value);
     ensure!(path.is_absolute(), "SQLite database path must be absolute");

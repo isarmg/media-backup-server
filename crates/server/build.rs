@@ -1,19 +1,19 @@
 use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
-const FOUNDATION_SOURCE: &str = "git+https://github.com/isarmg/xcss.git?rev=";
+const XCSS_SOURCE: &str = "git+https://github.com/isarmg/xcss.git?rev=";
 
-fn locked_foundation_revision(lockfile: &str) -> String {
+fn locked_xcss_revision(lockfile: &str) -> String {
     let revisions = lockfile
         .lines()
         .map(str::trim)
         .filter_map(|line| line.strip_prefix("source = \"")?.strip_suffix('"'))
-        .filter_map(|source| source.strip_prefix(FOUNDATION_SOURCE))
-        .map(|source| source.split_once('#').expect("locked Foundation source"))
+        .filter_map(|source| source.strip_prefix(XCSS_SOURCE))
+        .map(|source| source.split_once('#').expect("locked xcss source"))
         .map(|(requested, locked)| {
-            assert_eq!(requested, locked, "Foundation revision must be immutable");
+            assert_eq!(requested, locked, "xcss revision must be immutable");
             assert!(
                 locked.len() == 40 && locked.bytes().all(|byte| byte.is_ascii_hexdigit()),
-                "Foundation revision must be full hexadecimal"
+                "xcss revision must be full hexadecimal"
             );
             locked.to_owned()
         })
@@ -21,12 +21,9 @@ fn locked_foundation_revision(lockfile: &str) -> String {
     assert_eq!(
         revisions.len(),
         1,
-        "all Foundation crates must share one revision"
+        "the xcss package must use one immutable revision"
     );
-    revisions
-        .into_iter()
-        .next()
-        .expect("one Foundation revision")
+    revisions.into_iter().next().expect("one xcss revision")
 }
 
 fn main() {
@@ -43,14 +40,13 @@ fn main() {
         panic!("XSZS_SOURCE_REVISION must be 40 lowercase hexadecimal characters");
     }
     if target != "x86_64-unknown-linux-gnu" {
-        panic!("all Media Backup server builds require x86_64-unknown-linux-gnu");
+        panic!("all xszs server builds require x86_64-unknown-linux-gnu");
     }
     println!("cargo:rustc-env=XSZS_SOURCE_REVISION={revision}");
     println!("cargo:rustc-env=XSZS_BUILD_TARGET={target}");
-    let foundation_revision = locked_foundation_revision(
-        &fs::read_to_string("../../Cargo.lock").expect("read Cargo.lock"),
-    );
-    println!("cargo:rustc-env=XCSS_FOUNDATION_REVISION={foundation_revision}");
+    let xcss_revision =
+        locked_xcss_revision(&fs::read_to_string("../../Cargo.lock").expect("read Cargo.lock"));
+    println!("cargo:rustc-env=XCSS_REVISION={xcss_revision}");
     println!("cargo:rerun-if-changed=../../Cargo.lock");
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("Cargo manifest directory"));
     let web_root = env::var_os("XCSS_WEB_DIST")
@@ -61,5 +57,5 @@ fn main() {
                 .expect("server crate within workspace")
                 .join("web/dist")
         });
-    xcss_web_assets::build::generate(&web_root).expect("build current embedded Web assets");
+    xcss::web_assets::build::generate(&web_root).expect("build current embedded Web assets");
 }

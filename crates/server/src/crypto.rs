@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use xcss_secret::{SecretBytes, SecretKey};
-use xcss_secret_envelope::EnvelopeDomain;
+use xcss::secret::{SecretBytes, SecretKey};
+use xcss::secret_envelope::EnvelopeDomain;
 
 use crate::error::AppError;
 
@@ -29,7 +29,7 @@ impl SecretBox {
         instance_id: &str,
         value: &str,
     ) -> Result<Vec<u8>, AppError> {
-        xcss_secret_envelope::seal::<ClientAuthorizationEnvelope>(
+        xcss::secret_envelope::seal::<ClientAuthorizationEnvelope>(
             &self.master,
             instance_id.as_bytes(),
             &SecretBytes::new(value.as_bytes().to_vec()),
@@ -47,7 +47,7 @@ impl SecretBox {
         instance_id: &str,
         encoded: &[u8],
     ) -> Result<String, AppError> {
-        let value = xcss_secret_envelope::open::<ClientAuthorizationEnvelope>(
+        let value = xcss::secret_envelope::open::<ClientAuthorizationEnvelope>(
             &self.master,
             instance_id.as_bytes(),
             encoded,

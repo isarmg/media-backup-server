@@ -138,10 +138,10 @@ async fn test_state(database: &Path, data: &Path) -> (AppState, SqlitePool) {
         credentials_key: [7; 32],
         sources: Default::default(),
     };
-    let service = xcss_admin_core::AdministratorService::new(
-        xcss_admin_sqlite::SqliteAdministratorStore::new(pool.clone()),
+    let service = xcss::admin_core::AdministratorService::new(
+        xcss::admin_sqlite::SqliteAdministratorStore::new(pool.clone()),
     );
-    use xcss_admin_core::AdministratorStore as _;
+    use xcss::admin_core::AdministratorStore as _;
     if service.store().administrator_count().await.unwrap() == 0 {
         service
             .bootstrap_administrator(
@@ -154,7 +154,7 @@ async fn test_state(database: &Path, data: &Path) -> (AppState, SqlitePool) {
     }
     let state = crate::build_state(&config, pool.clone(), storage)
         .await
-        .expect("build Foundation-backed test state");
+        .expect("build xcss-backed test state");
     upload_commit::reconcile_all(&state)
         .await
         .expect("reconcile uploads on test startup");
@@ -163,10 +163,10 @@ async fn test_state(database: &Path, data: &Path) -> (AppState, SqlitePool) {
 
 async fn test_router(state: AppState) -> Router {
     let runtime =
-        xcss_server_runtime::ServerRuntime::builder(xcss_server_runtime::ProductDescriptor {
+        xcss::server_runtime::ServerRuntime::builder(xcss::server_runtime::ProductDescriptor {
             id: "xszs".into(),
             version: env!("CARGO_PKG_VERSION").into(),
-            foundation_revision: env!("XCSS_FOUNDATION_REVISION").into(),
+            xcss_revision: env!("XCSS_REVISION").into(),
             profile: "server-control-plane".into(),
             capabilities: vec![
                 "embedded-web".into(),
@@ -1351,7 +1351,7 @@ async fn rotating_or_revoking_an_instance_invalidates_its_api_keys() {
 
     let _ = admin::rotate_instance_authorization(
         axum::extract::State(state.clone()),
-        xcss_server_cli::ContractPath(device_id),
+        xcss::server_cli::ContractPath(device_id),
     )
     .await
     .expect("rotate instance authorization");
@@ -1425,7 +1425,7 @@ async fn rotating_or_revoking_an_instance_invalidates_its_api_keys() {
         let error = api_access::create_api_key(
             axum::extract::State(state.clone()),
             axum::extract::Extension(stale),
-            xcss_server_cli::ContractJson(request),
+            xcss::server_cli::ContractJson(request),
         )
         .await
         .expect_err("old in-flight credential must not mint a replacement key");
@@ -1434,7 +1434,7 @@ async fn rotating_or_revoking_an_instance_invalidates_its_api_keys() {
 
     admin::remove_instance(
         axum::extract::State(state.clone()),
-        xcss_server_cli::ContractPath(device_id),
+        xcss::server_cli::ContractPath(device_id),
     )
     .await
     .expect("revoke paired instance");
@@ -1446,14 +1446,14 @@ async fn rotating_or_revoking_an_instance_invalidates_its_api_keys() {
     .await;
     let error = admin::rotate_instance_authorization(
         axum::extract::State(state.clone()),
-        xcss_server_cli::ContractPath(device_id),
+        xcss::server_cli::ContractPath(device_id),
     )
     .await
     .expect_err("revoked instance must not be reauthorized");
     assert_eq!(error.status, StatusCode::CONFLICT);
     admin::remove_instance(
         axum::extract::State(state.clone()),
-        xcss_server_cli::ContractPath(device_id),
+        xcss::server_cli::ContractPath(device_id),
     )
     .await
     .expect("delete empty revoked instance with revoked API key history");
@@ -1495,8 +1495,8 @@ async fn account_storage_path_cannot_strand_active_uploads_or_committed_media() 
     let change = || {
         admin::update_user(
             axum::extract::State(state.clone()),
-            xcss_server_cli::ContractPath(account_id),
-            xcss_server_cli::ContractJson(update(changed_path)),
+            xcss::server_cli::ContractPath(account_id),
+            xcss::server_cli::ContractJson(update(changed_path)),
         )
     };
     let error = change()
@@ -1522,8 +1522,8 @@ async fn account_storage_path_cannot_strand_active_uploads_or_committed_media() 
 
     let _ = admin::update_user(
         axum::extract::State(state.clone()),
-        xcss_server_cli::ContractPath(account_id),
-        xcss_server_cli::ContractJson(update(&account_path)),
+        xcss::server_cli::ContractPath(account_id),
+        xcss::server_cli::ContractJson(update(&account_path)),
     )
     .await
     .expect("name and quota may still be updated without changing storage path");
@@ -1688,7 +1688,7 @@ async fn administrator_pending_bytes_match_quota_reservations() {
     let overview = serde_json::to_value(
         admin::overview(
             axum::extract::State(state.clone()),
-            xcss_server_cli::ContractQuery(admin::OverviewQuery::default()),
+            xcss::server_cli::ContractQuery(admin::OverviewQuery::default()),
         )
         .await
         .unwrap()
@@ -1712,7 +1712,7 @@ async fn administrator_pending_bytes_match_quota_reservations() {
     let overview = serde_json::to_value(
         admin::overview(
             axum::extract::State(state.clone()),
-            xcss_server_cli::ContractQuery(admin::OverviewQuery::default()),
+            xcss::server_cli::ContractQuery(admin::OverviewQuery::default()),
         )
         .await
         .unwrap()

@@ -15,7 +15,7 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt};
 const MANIFEST_VERSION: u32 = 1;
 const PRODUCT: &str = "xszs";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-const TARGET: &str = xcss_server_target::SERVER_TARGET_TRIPLE;
+const TARGET: &str = xcss::server_target::SERVER_TARGET_TRIPLE;
 const API_VERSION: &str = xszs_protocol::API_VERSION;
 const STORAGE_ENCODING: &str = "plain-v1";
 const MANIFEST_FILENAME: &str = "release-manifest.json";
@@ -143,7 +143,7 @@ fn ensure_supported_runtime_host() -> Result<()> {
     let host = rustix::system::uname();
     ensure!(
         host.sysname().to_bytes() == b"Linux" && host.machine().to_bytes() == b"x86_64",
-        "formal Media Backup server runtime requires Linux x86_64"
+        "formal xszs server runtime requires Linux x86_64"
     );
     Ok(())
 }
@@ -151,7 +151,7 @@ fn ensure_supported_runtime_host() -> Result<()> {
 pub(crate) fn ensure_unbound_development_serve() -> Result<()> {
     ensure!(
         env!("XSZS_SOURCE_REVISION") == "unbound",
-        "a source-bound Media Backup release cannot use run without a release root; use run --release-root RELEASE_ROOT"
+        "a source-bound xszs release cannot use run without a release root; use run --release-root RELEASE_ROOT"
     );
     Ok(())
 }
@@ -175,7 +175,7 @@ fn validate_runtime_root(root: &Path) -> Result<PathBuf> {
     );
     ensure!(
         canonical.ends_with(RELOCATABLE_RELEASE_SUFFIX),
-        "RELEASE_ROOT must end in the fixed Media Backup {VERSION} physical release path"
+        "RELEASE_ROOT must end in the fixed xszs {VERSION} physical release path"
     );
     Ok(canonical)
 }
@@ -298,7 +298,7 @@ fn verify_with_ownership(root: &Path, require_root_owned: bool) -> Result<Releas
         web_manifest == crate::web_assets::MANIFEST.as_bytes(),
         "release Web inventory differs from the executing binary"
     );
-    xcss_web_assets::verify_embedded(
+    xcss::web_assets::verify_embedded(
         crate::web_assets::ASSETS,
         crate::web_assets::MANIFEST,
         crate::web_assets::DIGEST,

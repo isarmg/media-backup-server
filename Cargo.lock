@@ -3048,259 +3048,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
-name = "xcss-admin-auth"
+name = "xcss"
 version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "argon2",
- "base64 0.23.1",
- "getrandom 0.4.3",
- "hmac",
- "sha2 0.11.0",
- "subtle",
- "thiserror",
-]
-
-[[package]]
-name = "xcss-admin-axum"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "axum",
- "bytes",
- "http-body-util",
- "mime",
- "serde",
- "serde_json",
- "tokio",
- "xcss-admin-auth",
- "xcss-admin-core",
- "xcss-contracts",
-]
-
-[[package]]
-name = "xcss-admin-core"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "async-trait",
- "serde_json",
- "thiserror",
- "tokio",
- "xcss-admin-auth",
- "xcss-contracts",
-]
-
-[[package]]
-name = "xcss-admin-sqlite"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "async-trait",
- "sqlx",
- "thiserror",
- "xcss-admin-auth",
- "xcss-admin-core",
-]
-
-[[package]]
-name = "xcss-admin-static"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "async-trait",
- "serde",
- "serde_json",
- "thiserror",
- "xcss-admin-auth",
- "xcss-admin-core",
- "xcss-fs-safety",
-]
-
-[[package]]
-name = "xcss-config"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "rustix",
- "serde",
- "serde_json",
- "xcss-error",
- "xcss-state-file",
-]
-
-[[package]]
-name = "xcss-contracts"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
- "xcss-admin-auth",
- "xcss-error",
- "xcss-schema-identity",
-]
-
-[[package]]
-name = "xcss-error"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "xcss-fs-safety"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "getrandom 0.4.3",
- "rustix",
- "thiserror",
-]
-
-[[package]]
-name = "xcss-log"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "chrono",
- "rustix",
- "serde",
- "serde_json",
- "thiserror",
- "tracing",
- "tracing-subscriber",
- "windows-sys 0.61.2",
- "xcss-error",
-]
-
-[[package]]
-name = "xcss-schema-identity"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "serde",
- "sha2 0.11.0",
- "thiserror",
-]
-
-[[package]]
-name = "xcss-secret"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "zeroize",
-]
-
-[[package]]
-name = "xcss-secret-envelope"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
+source = "git+https://github.com/isarmg/xcss.git?rev=9fb5b3f8f20762cb93050bc52ea81a36ac0dc914#9fb5b3f8f20762cb93050bc52ea81a36ac0dc914"
 dependencies = [
  "aes-gcm",
+ "anyhow",
+ "argon2",
+ "async-trait",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "chrono",
+ "futures-executor",
+ "futures-util",
  "getrandom 0.4.3",
  "hkdf",
- "sha2 0.11.0",
- "thiserror",
- "xcss-secret",
- "zeroize",
-]
-
-[[package]]
-name = "xcss-server-cli"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "axum",
+ "hmac",
+ "http",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "ipnet",
+ "libc",
+ "libsqlite3-sys",
+ "log",
+ "mime",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "serde_path_to_error",
- "tokio",
- "tower",
- "xcss-admin-static",
- "xcss-error",
- "xcss-fs-safety",
- "xcss-server-runtime",
- "xcss-sqlite",
- "xcss-state-file",
-]
-
-[[package]]
-name = "xcss-server-runtime"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "async-trait",
- "axum",
- "futures-util",
- "getrandom 0.4.3",
- "hyper",
- "hyper-util",
- "log",
- "rustix",
- "serde",
- "serde_json",
+ "sha2 0.11.0",
  "socket2",
+ "sqlx",
+ "subtle",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-util",
  "tower",
- "xcss-admin-auth",
- "xcss-admin-axum",
- "xcss-admin-core",
- "xcss-contracts",
- "xcss-schema-identity",
-]
-
-[[package]]
-name = "xcss-server-target"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-
-[[package]]
-name = "xcss-sqlite"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "futures-executor",
- "libc",
- "libsqlite3-sys",
- "rustix",
- "sha2 0.11.0",
- "sqlx",
- "tempfile",
- "thiserror",
- "tokio",
- "xcss-schema-identity",
-]
-
-[[package]]
-name = "xcss-state-file"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "rustix",
- "thiserror",
- "xcss-server-target",
-]
-
-[[package]]
-name = "xcss-web-assets"
-version = "1.0.0"
-source = "git+https://github.com/isarmg/xcss.git?rev=d58b9ef0822984ee0d29fb8b8139cfd2787374fb#d58b9ef0822984ee0d29fb8b8139cfd2787374fb"
-dependencies = [
- "anyhow",
- "bytes",
- "http",
- "rustix",
- "serde",
- "serde_json",
- "sha2 0.11.0",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "uuid",
+ "zeroize",
 ]
 
 [[package]]
@@ -3330,23 +3123,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "xcss-admin-auth",
- "xcss-admin-axum",
- "xcss-admin-core",
- "xcss-admin-sqlite",
- "xcss-config",
- "xcss-contracts",
- "xcss-error",
- "xcss-log",
- "xcss-schema-identity",
- "xcss-secret",
- "xcss-secret-envelope",
- "xcss-server-cli",
- "xcss-server-runtime",
- "xcss-server-target",
- "xcss-sqlite",
- "xcss-state-file",
- "xcss-web-assets",
+ "xcss",
  "xszs-protocol",
 ]
 

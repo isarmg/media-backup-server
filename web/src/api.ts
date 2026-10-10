@@ -1,4 +1,4 @@
-import { createAdministratorApiClient, type JsonGuard } from "@xcss/admin-web";
+import { createAdministratorApiClient, type JsonGuard } from "@xcss/web/admin-web";
 
 export const administratorApi = createAdministratorApiClient();
 
@@ -97,7 +97,7 @@ export function request<T>(
   init?: RequestInit & { maxResponseBytes?: number; timeoutMs?: number },
 ): Promise<T> {
   if (!path.startsWith("/api/v1/admin/")) {
-    throw new TypeError("Media Backup 管理 API 必须位于 /api/v1/admin/");
+    throw new TypeError("xszs 管理 API 必须位于 /api/v1/admin/");
   }
   return administratorApi.request(path, guard, init);
 }

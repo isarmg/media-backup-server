@@ -17,7 +17,7 @@ xszs status --config /absolute/config.json --data-dir /absolute/data --json
 
 `config validate` 读取私有 SQLite 验证快照，原库、WAL、SHM 和业务文件保持不变。`status` 查询当前监听地址的 `/readyz`，核对服务身份和真实业务就绪；端口占用、其他服务、连接失败或未就绪均返回非零退出码。`--json` 输出单个机器记录；失败返回稳定 `code/message/details` 错误记录。帮助和版本查询不要求初始化。
 
-共享配置、命令、快照与日志均固定到同一 Foundation Git 完整提交和精确版本；Web 包使用封存制品的真实 SHA-512 完整性。当前是发行候选；正式产品发布以精准 Source 的 CI 和 Release manifest 为准。正式发行必须从这些精确输入独立构建并验证最终制品。
+共享配置、命令、快照与日志均固定到同一 xcss Git 完整提交和精确版本；Web 包使用封存制品的真实 SHA-512 完整性。当前是发行候选；正式产品发布以精准 Source 的 CI 和 Release manifest 为准。正式发行必须从这些精确输入独立构建并验证最终制品。
 
 媒体数据库使用明确配置的绝对私有路径；`state_paths` 另外列出数据库父目录，覆盖数据库和 WAL/SHM。上传和媒体目录在绝对 `data_dir` 内。校验同时检查管理员、存储目录和已保存授权码的解密与摘要；数据结构不符时只读失败。
 

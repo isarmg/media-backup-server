@@ -9,7 +9,7 @@ use sqlx::Row;
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
-use xcss_server_cli::ContractPath;
+use xcss::server_cli::ContractPath;
 
 fn range(value: &str, size: u64) -> Result<(u64, u64), ()> {
     let value = value.strip_prefix("bytes=").ok_or(())?;

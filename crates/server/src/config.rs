@@ -5,7 +5,7 @@ use std::{
     net::SocketAddr,
     path::{Path, PathBuf},
 };
-use xcss_config::{ConfigSource, EnvMapping, EnvValueKind, Override};
+use xcss::config::{ConfigSource, EnvMapping, EnvValueKind, Override};
 
 use anyhow::{Context, Result};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -41,9 +41,9 @@ impl Config {
         let config = config.map(normalize_config_path).transpose()?;
         let file = config
             .as_deref()
-            .map(xcss_config::read_private_file)
+            .map(xcss::config::read_private_file)
             .transpose()?;
-        let environment = xcss_config::read_environment(&ENVIRONMENT, |name| env::var(name).ok())?;
+        let environment = xcss::config::read_environment(&ENVIRONMENT, |name| env::var(name).ok())?;
         let mut command_line = Vec::new();
         if let Some(path) = data_dir {
             command_line.push(Override::new(
@@ -54,7 +54,7 @@ impl Config {
         if let Some(bind) = bind {
             command_line.push(Override::new("/bind", bind.to_string()));
         }
-        let loaded = xcss_config::resolve_validated(
+        let loaded = xcss::config::resolve_validated(
             &Settings::default(),
             file.as_deref(),
             &environment,
@@ -73,7 +73,7 @@ impl Config {
             configured_administrator_username(settings.bootstrap_admin_username)?;
         let bootstrap_admin_password = settings.bootstrap_admin_password;
         if let Some(password) = &bootstrap_admin_password {
-            xcss_admin_auth::validate_password(password)?;
+            xcss::admin_auth::validate_password(password)?;
         }
         anyhow::ensure!(
             settings.max_part_bytes > 0,
@@ -239,7 +239,7 @@ fn bind_address(value: Option<String>) -> Result<SocketAddr> {
 }
 
 fn configured_administrator_username(value: String) -> Result<String> {
-    xcss_admin_auth::normalize_administrator_username(&value)
+    xcss::admin_auth::normalize_administrator_username(&value)
         .map_err(|error| anyhow::anyhow!("ADMIN_USERNAME is invalid: {error}"))
 }
 
@@ -293,9 +293,9 @@ mod tests {
 fn validate_intrinsic(
     settings: &Settings,
     source: ConfigSource,
-) -> Result<(), xcss_config::ConfigError> {
+) -> Result<(), xcss::config::ConfigError> {
     let invalid =
-        |path| xcss_config::ConfigError::new(xcss_config::Reason::InvalidValue, path, source);
+        |path| xcss::config::ConfigError::new(xcss::config::Reason::InvalidValue, path, source);
     settings
         .bind
         .parse::<SocketAddr>()
@@ -312,7 +312,7 @@ fn validate_intrinsic(
     configured_administrator_username(settings.bootstrap_admin_username.clone())
         .map_err(|_| invalid("/bootstrap_admin_username"))?;
     if let Some(password) = &settings.bootstrap_admin_password {
-        xcss_admin_auth::validate_password(password)
+        xcss::admin_auth::validate_password(password)
             .map_err(|_| invalid("/bootstrap_admin_password"))?;
     }
     if settings
@@ -359,7 +359,7 @@ mod precedence_contract_tests {
     #[test]
     fn a_higher_priority_override_cannot_hide_an_invalid_file_value() {
         let file = serde_json::to_vec(&serde_json::json!({"upload_global_concurrency":0})).unwrap();
-        let error = xcss_config::resolve_validated(
+        let error = xcss::config::resolve_validated(
             &Settings::default(),
             Some(&file),
             &[],

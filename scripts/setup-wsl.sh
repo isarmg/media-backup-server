@@ -4,8 +4,8 @@ set -euo pipefail
 readonly product="xszs"
 readonly version="1.0.0"
 readonly target="x86_64-unknown-linux-gnu"
-readonly service_user="ixcss-media"
-readonly service_group="ixcss-media"
+readonly service_user="xszs"
+readonly service_group="xszs"
 readonly app_dir="/opt/isarmg/xszs"
 readonly releases_dir="$app_dir/releases"
 readonly state_dir="/var/lib/isarmg/xszs"
@@ -540,6 +540,6 @@ else
 fi
 printf 'Before first start, use sudoedit %s to securely record or replace all three generated secrets and remove %s.\n' \
   "$config_file" "$initial_secret_marker"
-printf 'After saving configuration, run systemd-run --wait --collect -p User=ixcss-media -p Group=ixcss-media -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init before starting the service.\n'
-printf 'Installed Media Backup %s from source revision %s; the service was not started.\n' \
+printf 'After saving configuration, run systemd-run --wait --collect -p User=xszs -p Group=xszs -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init before starting the service.\n'
+printf 'Installed xszs %s from source revision %s; the service was not started.\n' \
   "$version" "$source_revision"

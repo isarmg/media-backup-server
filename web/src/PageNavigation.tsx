@@ -1,5 +1,5 @@
-import { Button } from "@xcss/admin-ui";
-import { t } from "@xcss/admin-ui/i18n";
+import { Button } from "@xcss/web/admin-ui";
+import { t } from "@xcss/web/admin-ui/i18n";
 import type { PageCursors } from "./api";
 
 export function PageNavigation({ page, first, move, label, canRestart = false, loading = false, firstLabel = t("第一页", "First page") }: {

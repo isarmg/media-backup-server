@@ -9,7 +9,7 @@
 - Server 只支持 **Linux x86_64（AMD64）**，目标为
   `x86_64-unknown-linux-gnu`。ARM、其他 CPU 架构、macOS、Windows 原生环境和非 GNU Linux 均不在
   Server 支持范围内。
-- 正式运行方式是 systemd。服务固定使用非 root 账户 `ixcss-media`。
+- 正式运行方式是 systemd。服务固定使用非 root 账户 `xszs`。
 - 当前发行使用完整版本实体目录；只有 `run` 接受同一安装目录下的单跳 `current`，目标必须是当前编译版本的绝对实体路径，拒绝其他软链接。
 - 安装器只接受全新的目标。它不会覆盖、合并或修补已有 `1.0.0` 发行目录，也不会覆盖已有 systemd
   unit。
@@ -58,7 +58,7 @@ xszs-1.0.0-x86_64-unknown-linux-gnu/
   文件的相对路径、权限、大小、SHA-256。
 - `bin/xszs` 同时实现独立发行校验和服务启动时校验。仅替换 manifest 或仅替换二进制都
   无法组成有效发行。
-- `share/web-assets.json` 是 Foundation 编译时生成的资源清单，必须逐字节等于 binary 的 `web-assets`
+- `share/web-assets.json` 是 xcss 编译时生成的资源清单，必须逐字节等于 binary 的 `web-assets`
   输出。HTML/JS/CSS/字体全部内嵌于 binary，运行时无需 Web 目录；不得编辑清单或目录覆盖。
 - `docs/feature-inventory-and-tradeoffs.md` 是当前完整功能与取舍清单，说明每项能力的分类、复杂度、
   删除后果和验证要求。
@@ -116,12 +116,12 @@ sudo ./scripts/setup-wsl.sh
 
 1. 检查 Linux x86_64、root 权限、发行包物理路径和完整 payload。
 2. 在任何安装写入前拒绝链接路径、特殊文件、非空发行目标、已有版本目录和已有 systemd unit。
-3. 创建或核对专用组与账户 `ixcss-media`；账户 home 固定为
+3. 创建或核对专用组与账户 `xszs`；账户 home 固定为
    `/var/lib/isarmg/xszs`，登录 shell 必须是 `nologin`。
 4. 把经过校验的完整发行复制到 `/opt/isarmg/xszs/releases/1.0.0`，设为 root 所有，并再次
    运行 installed-release 校验。
 5. 创建 `/var/lib/isarmg/xszs/db` 与 `/var/lib/isarmg/xszs/data`，权限为 `0750`，
-   所有者为 `ixcss-media:ixcss-media`。
+   所有者为 `xszs:xszs`。
 6. 若配置不存在，以 root、`0600`、单硬链接方式排他创建 `/etc/isarmg/xszs.env`，生成彼此
    独立的 256-bit 初始管理员密码和指标 Token；脚本不会把秘密打印到终端。
 7. 排他安装 `/etc/systemd/system/xszs.service`，执行 `systemctl daemon-reload`，但不会启动
@@ -203,7 +203,7 @@ Server 与管理 Web 只有一个角色：`admin`。不存在访客、普通后�
 可信反向代理
         │ HTTP，仅同机 loopback 或受控私网
         ▼
-127.0.0.1:8080 Media Backup
+127.0.0.1:8080 xszs
 ```
 
 最小 Caddy 示例：
@@ -226,7 +226,7 @@ media.example.com {
 完成秘密替换、删除 marker 并配置反向代理后运行。`init` 直接读取 `EnvironmentFile` 中的私有 `BOOTSTRAP_ADMIN_PASSWORD`，没有交互输入，也不接受密码命令行参数：
 
 ```bash
-sudo systemd-run --wait --collect -p User=ixcss-media -p Group=ixcss-media -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
+sudo systemd-run --wait --collect -p User=xszs -p Group=xszs -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
 sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
 ```
 
@@ -370,9 +370,9 @@ commit、待回收 blob 和孤儿 commit staging。
 1. `systemctl status` 与 Journal 的第一条错误；
 2. 主机是否为 Linux x86_64；
 3. 固定发行目录、unit 和配置的所有权/权限是否漂移；
-4. `DATABASE_URL`、`DATA_DIR` 和 `BIND` 是否有效；Session 生命周期由 Foundation 固定；
+4. `DATABASE_URL`、`DATA_DIR` 和 `BIND` 是否有效；Session 生命周期由 xcss 固定；
 5. 数据库是否是精确的当前产品、版本、Schema 和对象指纹；
-6. 数据目录是否可由 `ixcss-media` 访问，以及容量/inode 是否耗尽。
+6. 数据目录是否可由 `xszs` 访问，以及容量/inode 是否耗尽。
 
 遇到非当前格式或 Schema 漂移必须停止并保留现场。本轮没有旧格式转换流程；不要现场执行
 `ALTER TABLE`、修改版本元数据或添加兼容列。当前状态损坏只能从经验证的当前格式备份恢复。
@@ -421,7 +421,7 @@ commit、待回收 blob 和孤儿 commit staging。
 - [ ] 三个初始秘密已按不同用途安全保存或替换，初始化 marker 已删除。
 - [ ] Server 只监听受控地址，公网只能通过可信 TLS 反向代理访问。
 - [ ] `TRUSTED_PROXY_CIDRS` 只包含真实直连代理。
-- [ ] systemd 服务以 `ixcss-media` 运行，unit 与发行内容一致。
+- [ ] systemd 服务以 `xszs` 运行，unit 与发行内容一致。
 - [ ] `/healthz`、`/readyz` 和包内验收脚本均通过；不存在旧健康路径别名。
 - [ ] 从真实域名验证证书链、管理页、username 登录、Session 和退出。
 - [ ] 数据库与媒体容量、inode、日志、指标和证书到期监控已配置。

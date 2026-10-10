@@ -10,7 +10,7 @@ use sqlx::{
     Connection, SqliteConnection, SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous},
 };
-use xcss_schema_identity::SchemaIdentity;
+use xcss::schema_identity::SchemaIdentity;
 
 #[cfg(unix)]
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
@@ -53,7 +53,7 @@ pub(crate) async fn connect_validated_location(database_url: &str) -> anyhow::Re
     // Revalidate after SQLx opens the production generation. A correctly
     // configured process holds RuntimeLock across both operations.
     if let Err(error) =
-        xcss_sqlite::require_pool_current_schema(&pool, &current_schema_identity()?).await
+        xcss::sqlite::require_pool_current_schema(&pool, &current_schema_identity()?).await
     {
         pool.close().await;
         return Err(error.into());
@@ -76,13 +76,13 @@ pub(crate) fn initialize(database_url: &str) -> anyhow::Result<()> {
     }
 }
 
-pub(crate) fn connection_limits() -> xcss_sqlite::ConnectionLimits {
-    xcss_sqlite::ConnectionLimits::new(2 * 1024 * 1024)
+pub(crate) fn connection_limits() -> xcss::sqlite::ConnectionLimits {
+    xcss::sqlite::ConnectionLimits::new(2 * 1024 * 1024)
 }
 
 pub(crate) async fn harden_connection(connection: &mut SqliteConnection) -> anyhow::Result<()> {
-    xcss_sqlite::apply_connection_limits(connection, connection_limits()).await?;
-    xcss_sqlite::enable_defensive(connection).await?;
+    xcss::sqlite::apply_connection_limits(connection, connection_limits()).await?;
+    xcss::sqlite::enable_defensive(connection).await?;
     sqlx::raw_sql("PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON; PRAGMA mmap_size=0;")
         .execute(connection)
         .await?;
@@ -91,8 +91,8 @@ pub(crate) async fn harden_connection(connection: &mut SqliteConnection) -> anyh
 
 pub(crate) fn validate_current_database(path: &Path) -> anyhow::Result<()> {
     require_secure_database_file(path)?;
-    let snapshot = xcss_sqlite::ValidationSnapshot::capture(path)?;
-    xcss_sqlite::block_on_sqlite_connection(async {
+    let snapshot = xcss::sqlite::ValidationSnapshot::capture(path)?;
+    xcss::sqlite::block_on_sqlite_connection(async {
         let mut connection = SqliteConnection::connect_with(
             &SqliteConnectOptions::new()
                 .filename(snapshot.database_path())
@@ -123,8 +123,8 @@ pub(crate) fn validate_current_database(path: &Path) -> anyhow::Result<()> {
 
 pub(crate) fn integrity_and_foreign_key_check(path: &Path) -> anyhow::Result<()> {
     require_secure_database_file(path)?;
-    let snapshot = xcss_sqlite::ValidationSnapshot::capture(path)?;
-    xcss_sqlite::block_on_sqlite_connection(async {
+    let snapshot = xcss::sqlite::ValidationSnapshot::capture(path)?;
+    xcss::sqlite::block_on_sqlite_connection(async {
         let mut connection = SqliteConnection::connect_with(
             &SqliteConnectOptions::new()
                 .filename(snapshot.database_path())
@@ -200,7 +200,7 @@ fn initialize_current_database(path: &Path) -> anyhow::Result<()> {
         .context("create current SQLite database")?;
     reserved.sync_all()?;
     drop(reserved);
-    let result = xcss_sqlite::block_on_sqlite_connection(async {
+    let result = xcss::sqlite::block_on_sqlite_connection(async {
         let mut connection = SqliteConnection::connect_with(
             &SqliteConnectOptions::new().filename(path).create_if_missing(false)
                 .busy_timeout(BUSY_TIMEOUT).synchronous(SqliteSynchronous::Full),
@@ -211,7 +211,7 @@ fn initialize_current_database(path: &Path) -> anyhow::Result<()> {
             sqlx::raw_sql(CURRENT_SCHEMA).execute(&mut *transaction).await?;
             sqlx::query("INSERT INTO _xcss_platform_metadata(singleton,platform_generation,platform_schema_revision,profile,created_at_micros) VALUES(1,1,1,'server-control-plane',?)")
                 .bind(0_i64).execute(&mut *transaction).await?;
-            let actual = xcss_sqlite::schema_fingerprint(&mut *transaction).await?;
+            let actual = xcss::sqlite::schema_fingerprint(&mut *transaction).await?;
             ensure!(actual == CURRENT_SCHEMA_SHA256, "compiled current schema fingerprint mismatch");
             sqlx::query("INSERT INTO product_metadata(singleton,application,application_version,schema_revision,schema_sha256) VALUES(1,?,?,?,?)")
                 .bind(APPLICATION).bind("1.0.0").bind(CURRENT_SCHEMA_REVISION).bind(CURRENT_SCHEMA_SHA256)
@@ -248,9 +248,9 @@ fn require_absent_sidecars(path: &Path) -> anyhow::Result<()> {
 }
 
 async fn validate_current_connection(connection: &mut SqliteConnection) -> anyhow::Result<()> {
-    xcss_sqlite::require_current_schema(connection, &current_schema_identity()?)
+    xcss::sqlite::require_current_schema(connection, &current_schema_identity()?)
         .await
-        .context("database is not the exact current Media Backup schema")?;
+        .context("database is not the exact current xszs schema")?;
     Ok(())
 }
 
@@ -261,7 +261,7 @@ pub(crate) fn current_schema_identity() -> anyhow::Result<SchemaIdentity> {
         u64::try_from(CURRENT_SCHEMA_REVISION).context("schema revision must not be negative")?,
         CURRENT_SCHEMA_SHA256,
     )
-    .context("compiled Media Backup schema identity is invalid")
+    .context("compiled xszs schema identity is invalid")
 }
 
 fn require_secure_database_file(path: &Path) -> anyhow::Result<()> {
@@ -461,7 +461,7 @@ mod tests {
         .await
         .map(|result| result.rows_affected())
         .unwrap();
-        let fingerprint = xcss_sqlite::schema_fingerprint(&mut connection)
+        let fingerprint = xcss::sqlite::schema_fingerprint(&mut connection)
             .await
             .unwrap();
         sqlx::query(

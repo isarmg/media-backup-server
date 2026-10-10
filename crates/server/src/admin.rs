@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::Row;
 use uuid::Uuid;
-use xcss_server_cli::{ContractJson, ContractPath, ContractQuery};
+use xcss::server_cli::{ContractJson, ContractPath, ContractQuery};
 
 use crate::{error::AppError, routes::AppState};
 
@@ -169,7 +169,7 @@ pub(crate) async fn require_admin(
     mut request: Request,
     next: Next,
 ) -> Response {
-    let identity = match xcss_admin_axum::authenticate_request(
+    let identity = match xcss::admin_axum::authenticate_request(
         &state.administrator,
         request.headers(),
         request.uri(),
@@ -1009,7 +1009,7 @@ mod tests {
             assert!(status.success());
             return;
         }
-        xcss_sqlite::block_on_sqlite_connection(async {
+        xcss::sqlite::block_on_sqlite_connection(async {
             use sqlx::Connection as _;
             let mut database = sqlx::SqliteConnection::connect("sqlite::memory:")
                 .await

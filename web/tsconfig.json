@@ -1,5 +1,5 @@
 {
-  "extends": "@xcss/web-toolchain/tsconfig.json",
+  "extends": "@xcss/web/web-toolchain/tsconfig.json",
   "compilerOptions": { "noEmit": true },
   "include": ["src", "vite.config.ts"]
 }

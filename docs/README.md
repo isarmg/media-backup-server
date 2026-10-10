@@ -20,3 +20,5 @@ schema revision 1；软件版本、数据库版本和 Client 移动状态版本�
 当前发行说明：[版本 1.0.0](releases/1.0.0.md)。
 
 工程约定与依赖来源见 [架构说明](architecture.md)，Rust unsafe 结论见 [审查记录](unsafe-audit.md)。
+
+公共支撑的职责、单体依赖、平台边界与验证方法见[公共支撑说明](common-support.md)。

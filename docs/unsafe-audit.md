@@ -6,7 +6,7 @@
 
 产品 Rust 源码、协议、构建脚本、示例与测试中没有 `unsafe` 块、unsafe 函数/实现或 unsafe extern 定义，因此没有需要保留的产品 unsafe。根 `Cargo.toml` 定义 `[workspace.lints.rust] unsafe_code = "forbid"`，两个内部包均继承，后续不能通过模块级 allow 引入无依据的 unsafe。
 
-该结论针对自研产品源码，不表示第三方依赖或上游 Foundation 不使用 unsafe。操作系统、数据库和密钥能力通过现有安全 API 使用；依赖中的平台/FFI 边界仍由对应上游负责审查和验证，不复制它们的实现。
+该结论针对自研产品源码，不表示第三方依赖或上游 xcss 不使用 unsafe。操作系统、数据库和密钥能力通过现有安全 API 使用；依赖中的平台/FFI 边界仍由对应上游负责审查和验证，不复制它们的实现。
 
 ## 工程证据
 

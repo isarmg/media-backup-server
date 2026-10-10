@@ -1,15 +1,15 @@
-import { startAfterFonts } from "@xcss/web-fonts";
-import { t } from "@xcss/admin-ui/i18n";
+import { startAfterFonts } from "@xcss/web/web-fonts";
+import { t } from "@xcss/web/admin-ui/i18n";
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createXcssAdminApplication, errorRequestId, useAdminApplication, InstancePageNavigation, InstanceHeaderActions, AccountPage } from "@xcss/admin-shell";
-import { EmptyState, ErrorState, LoadingState } from "@xcss/admin-ui";
-import "@xcss/design-tokens/tokens.css";
-import "@xcss/design-tokens/tokens.dark.css";
-import "@xcss/design-tokens/reset.css";
-import "@xcss/design-tokens/accessibility.css";
-import "@xcss/web-fonts/fonts.css";
-import "@xcss/admin-ui/styles.css";
+import { createXcssAdminApplication, errorRequestId, useAdminApplication, InstancePageNavigation, InstanceHeaderActions, AccountPage } from "@xcss/web/admin-shell";
+import { EmptyState, ErrorState, LoadingState } from "@xcss/web/admin-ui";
+import "@xcss/web/design-tokens/tokens.css";
+import "@xcss/web/design-tokens/tokens.dark.css";
+import "@xcss/web/design-tokens/reset.css";
+import "@xcss/web/design-tokens/accessibility.css";
+import "@xcss/web/web-fonts/fonts.css";
+import "@xcss/web/admin-ui/styles.css";
 import "./styles.css";
 import { administratorApi, isBackupInstance, isBackupUser, request, type BackupUser } from "./api";
 
@@ -74,7 +74,7 @@ function Application() {
 }
 
 
-const Root = createXcssAdminApplication({ product: { name: "Media Backup" }, client: administratorApi,
+const Root = createXcssAdminApplication({ product: { name: "xszs" }, client: administratorApi,
   navigation: [], loginLandingHref: "#instances", routes: <Application /> });
 const root = document.getElementById("root");
 if (root === null) throw new Error("缺少 React 根节点");

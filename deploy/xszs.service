@@ -1,13 +1,13 @@
 [Unit]
-Description=Media Backup server
+Description=xszs server
 Wants=network-online.target
 After=network-online.target
 ConditionArchitecture=x86-64
 
 [Service]
 Type=simple
-User=ixcss-media
-Group=ixcss-media
+User=xszs
+Group=xszs
 UMask=0077
 WorkingDirectory=/var/lib/isarmg/xszs
 EnvironmentFile=/etc/isarmg/xszs.env

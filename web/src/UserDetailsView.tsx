@@ -1,7 +1,7 @@
-import { t } from "@xcss/admin-ui/i18n";
+import { t } from "@xcss/web/admin-ui/i18n";
 import { useRef, useState, type FormEvent } from "react";
-import { errorRequestId, useAdminApplication, InstanceNameField } from "@xcss/admin-shell";
-import { Button, ConfirmDangerDialog, ErrorState, FormField, StatusBadge, TextField } from "@xcss/admin-ui";
+import { errorRequestId, useAdminApplication, InstanceNameField } from "@xcss/web/admin-shell";
+import { Button, ConfirmDangerDialog, ErrorState, FormField, StatusBadge, TextField } from "@xcss/web/admin-ui";
 import { isBackupInstance, isBackupUser, isUndefined, request, type BackupInstance, type BackupUser } from "./api";
 import { lastSeen, pairingLabel } from "./display-labels";
 

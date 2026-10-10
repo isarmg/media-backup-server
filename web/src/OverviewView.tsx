@@ -1,7 +1,7 @@
-import { getLocale, t } from "@xcss/admin-ui/i18n";
+import { getLocale, t } from "@xcss/web/admin-ui/i18n";
 import { useEffect, useState } from "react";
-import { errorRequestId, useAdminApplication } from "@xcss/admin-shell";
-import { Button, EmptyState, ErrorState, LoadingState, StatusBadge, Table } from "@xcss/admin-ui";
+import { errorRequestId, useAdminApplication } from "@xcss/web/admin-shell";
+import { Button, EmptyState, ErrorState, LoadingState, StatusBadge, Table } from "@xcss/web/admin-ui";
 import { isOverview, isUndefined, request, type BackupInstance, type Overview } from "./api";
 import { PageNavigation } from "./PageNavigation";
 import { lastSeen, pairingLabel } from "./display-labels";

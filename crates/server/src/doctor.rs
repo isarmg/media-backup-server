@@ -73,8 +73,8 @@ pub(crate) fn run(config: &Config) -> anyhow::Result<DoctorSummary> {
 fn validate_database_files(database: &Path, files: &FileIndex) -> anyhow::Result<(u64, u64)> {
     // Recover and read only a held private generation. SQLx deliberately has no
     // SQLITE_OPEN_NOFOLLOW option; the private snapshot owns its guarded path.
-    let snapshot = xcss_server_cli::ValidationSnapshot::capture(database)?;
-    xcss_sqlite::block_on_sqlite_connection(async {
+    let snapshot = xcss::server_cli::ValidationSnapshot::capture(database)?;
+    xcss::sqlite::block_on_sqlite_connection(async {
         let mut connection = SqliteConnectOptions::new()
             .filename(snapshot.database_path())
             .create_if_missing(false)
@@ -633,7 +633,7 @@ fn valid_blake3(value: &str) -> bool {
 
 fn database_write_rollback_probe(lock: &RuntimeLock) -> anyhow::Result<()> {
     let url = lock.database_url()?;
-    xcss_sqlite::block_on_sqlite_connection(async {
+    xcss::sqlite::block_on_sqlite_connection(async {
         let mut connection = url
             .parse::<SqliteConnectOptions>()?
             .create_if_missing(false)
@@ -708,7 +708,7 @@ mod tests {
 
     #[test]
     fn diagnostic_account_prefix_check_detects_nonadjacent_ancestors() {
-        xcss_sqlite::block_on_sqlite_connection(async {
+        xcss::sqlite::block_on_sqlite_connection(async {
             let mut connection = SqliteConnection::connect("sqlite::memory:").await.unwrap();
             database::harden_connection(&mut connection).await.unwrap();
             sqlx::query(
@@ -748,7 +748,7 @@ mod tests {
         std::fs::create_dir(&data).unwrap();
         let database_url = format!("sqlite://{}", database_path.display());
         database::initialize(&database_url).unwrap();
-        xcss_sqlite::block_on_sqlite_connection(async {
+        xcss::sqlite::block_on_sqlite_connection(async {
             let mut connection = SqliteConnection::connect(&database_url).await.unwrap();
             sqlx::raw_sql("CREATE TABLE __xszs_doctor_probe(value INTEGER NOT NULL); INSERT INTO __xszs_doctor_probe(value) VALUES(7)")
                 .execute(&mut connection).await.unwrap();
@@ -756,7 +756,7 @@ mod tests {
         });
         let lock = RuntimeLock::acquire(&database_url, &data).unwrap();
         assert!(database_write_rollback_probe(&lock).is_err());
-        xcss_sqlite::block_on_sqlite_connection(async {
+        xcss::sqlite::block_on_sqlite_connection(async {
             let mut connection = SqliteConnection::connect(&lock.database_url().unwrap())
                 .await
                 .unwrap();

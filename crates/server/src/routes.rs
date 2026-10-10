@@ -17,7 +17,7 @@ use tokio::{
     time::timeout,
 };
 use uuid::Uuid;
-use xcss_server_cli::{ContractJson, ContractPath};
+use xcss::server_cli::{ContractJson, ContractPath};
 use xszs_protocol::{
     API_BASE_PATH, BootstrapRequest, BootstrapResponse, CompleteUploadResponse,
     CreateUploadRequest, CreateUploadResponse, EmptyRequest, MediaKind, ResourceManifest,
@@ -38,7 +38,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct AppState {
-    pub web_directory: Option<Arc<xcss_web_assets::DirectoryAssets>>,
+    pub web_directory: Option<Arc<xcss::web_assets::DirectoryAssets>>,
     pub secrets: crate::crypto::SecretBox,
     pub pool: SqlitePool,
     pub storage: LocalStorage,
@@ -46,8 +46,8 @@ pub struct AppState {
     pub login_admission: LoginAdmission,
     pub upload_admission: UploadAdmission,
     pub administrator:
-        Arc<xcss_admin_core::AdministratorService<xcss_admin_sqlite::SqliteAdministratorStore>>,
-    pub administrator_origin: xcss_admin_auth::AdministratorOriginMode,
+        Arc<xcss::admin_core::AdministratorService<xcss::admin_sqlite::SqliteAdministratorStore>>,
+    pub administrator_origin: xcss::admin_auth::AdministratorOriginMode,
 }
 
 #[derive(Clone)]
@@ -110,7 +110,7 @@ impl UploadAdmission {
 
 pub fn router(
     state: AppState,
-    runtime: xcss_server_runtime::RuntimeHandle,
+    runtime: xcss::server_runtime::RuntimeHandle,
 ) -> Result<Router, AppError> {
     const JSON_BODY_LIMIT: usize = 256 * 1024;
     const UPLOAD_MANIFEST_BODY_LIMIT: usize = 64 * 1024;
@@ -213,7 +213,7 @@ pub fn router(
             require_secure_transport,
         ));
 
-    let platform = xcss_server_runtime::platform_router(
+    let platform = xcss::server_runtime::platform_router(
         runtime,
         "xszs",
         state.administrator_origin,
@@ -232,7 +232,7 @@ pub fn router(
         })
         .layer(axum::middleware::from_fn(log_request))
         .layer(axum::middleware::from_fn(
-            xcss_server_cli::request_context_middleware,
+            xcss::server_cli::request_context_middleware,
         )))
 }
 
@@ -843,7 +843,7 @@ async fn log_request(
     use tracing::Instrument;
     let request_id = request
         .extensions()
-        .get::<xcss_contracts::RequestId>()
+        .get::<xcss::contracts::RequestId>()
         .map(|value| value.as_str().to_owned())
         .unwrap_or_default();
     let span = tracing::info_span!("http.request", request_id = request_id.as_str());

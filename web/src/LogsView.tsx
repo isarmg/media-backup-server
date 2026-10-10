@@ -1,13 +1,13 @@
-import { t } from "@xcss/admin-ui/i18n";
+import { t } from "@xcss/web/admin-ui/i18n";
 import { useEffect, useState } from "react";
-import { errorRequestId } from "@xcss/admin-shell";
-import { Button, EmptyState, ErrorState, LoadingState, Table } from "@xcss/admin-ui";
+import { errorRequestId } from "@xcss/web/admin-shell";
+import { Button, EmptyState, ErrorState, LoadingState, Table } from "@xcss/web/admin-ui";
 import { PageNavigation } from "./PageNavigation";
 import { isAdminLogs, request, type AdminLogs, type BackupInstance } from "./api";
 import { actionLabel } from "./display-labels";
 
-import { DateRangeField, type CalendarDateRange } from "@xcss/admin-ui/date-range";
-import "@xcss/admin-ui/date-range.css";
+import { DateRangeField, type CalendarDateRange } from "@xcss/web/admin-ui/date-range";
+import "@xcss/web/admin-ui/date-range.css";
 
 type Failure = { requestId?: string };
 const LOG_RESPONSE_BYTES = 1024 * 1024;

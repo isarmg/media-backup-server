@@ -1,15 +1,17 @@
-import {prepareApplicationFonts, startAfterFonts} from "@xcss/web-fonts";
+import {prepareApplicationFonts, startAfterFonts} from "@xcss/web/web-fonts";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
-import { assertXcssWebToolchain } from "@xcss/web-toolchain";
+import { assertXcssWebToolchain } from "@xcss/web/web-toolchain";
 import manifest from "../package.json" with { type: "json" };
 
 const lock = JSON.parse(
   readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"),
 );
-// One exact published Foundation version, with tarball integrity and no local links.
-const foundationPackages = ["admin-web", "admin-shell", "admin-ui", "contracts", "design-tokens", "http-client", "web-fonts", "web-toolchain"];
+// One exact published xcss version, with tarball integrity and no local links.
+
+assert.deepEqual(Object.keys(manifest.dependencies ?? {}).filter(name => name.startsWith("@xcss/")), ["@xcss/web"]);
+const xcssPackages = ["@xcss/web"];
 
 const nodeVersion = readFileSync(
   new URL("../../.node-version", import.meta.url),
@@ -17,9 +19,8 @@ const nodeVersion = readFileSync(
 );
 assert.match(nodeVersion, /^26\.7\.0\n?$/);
 assertXcssWebToolchain(manifest, nodeVersion);
-for (const name of foundationPackages) {
-  const dependency = `@xcss/${name}`;
-  const expected = `https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-${name}-1.0.0.tgz`;
+for (const dependency of xcssPackages) {
+  const expected = "https://github.com/isarmg/xcss/releases/download/v1.0.0/xcss-web-1.0.0.tgz";
   assert.equal(manifest.dependencies?.[dependency], expected);
   assert.equal(lock.packages?.[""]?.dependencies?.[dependency], expected);
 
@@ -29,10 +30,10 @@ for (const name of foundationPackages) {
   assert.equal(locked?.version, "1.0.0");
   assert.match(locked?.integrity ?? "", /^sha512-[A-Za-z0-9+/]+={0,2}$/);
 }
-const adminStyles = readFileSync(new URL("../node_modules/@xcss/admin-ui/dist/styles.css", import.meta.url), "utf8");
+const adminStyles = readFileSync(new URL("../node_modules/@xcss/web/dist/admin-ui/styles.css", import.meta.url), "utf8");
 assert.match(adminStyles, /@import ["']\.\/content-blocks\.css["']/);
 for (const snapshot of ["content-blocks.css", "provenance.json", "verify.mjs"]) {
-  assert.equal(existsSync(new URL(`../appearance/${snapshot}`, import.meta.url)), false, "Foundation CSS must not be copied into the product");
+  assert.equal(existsSync(new URL(`../appearance/${snapshot}`, import.meta.url)), false, "xcss CSS must not be copied into the product");
 }
 
 const main = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");

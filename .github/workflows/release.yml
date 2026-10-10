@@ -35,7 +35,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: npm ci --prefix web
-      - run: web/node_modules/.bin/xcss-build-server --config "$PWD/foundation-web-build.json" --mode development --web-only --no-install
+      - run: web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" --mode development --web-only --no-install
       - run: ./scripts/verify-release-version.sh "$RELEASE_TAG"
       - run: ./scripts/check-workflow-supply-chain.sh
       - run: cargo fmt --all -- --check
@@ -67,11 +67,11 @@ jobs:
         with:
           key: release-server
       - run: npm ci --prefix web
-      - run: web/node_modules/.bin/xcss-build-server --config "$PWD/foundation-web-build.json" --mode development --web-only --no-install
+      - run: web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" --mode development --web-only --no-install
       - name: Build, package, and verify server
         run: |
           revision="$(git rev-parse "${RELEASE_TAG}^{commit}")"
-          web/node_modules/.bin/xcss-build-server --config "$PWD/foundation-web-build.json" --mode release --rust-only --no-install --source-revision "$revision"
+          web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" --mode release --rust-only --no-install --source-revision "$revision"
           mkdir -p "$PWD/dist"
           archive="$(./scripts/build-server-release.sh "$PWD/target/x86_64-unknown-linux-gnu/release/xszs" "$revision" "$PWD/dist")"
           XSZS_VERIFY_SYSTEMD=1 ./scripts/test-deployment.sh "$archive"

@@ -550,8 +550,8 @@ if XSZS_SETUP_ROOT="$hardlink_config_root" XSZS_SETUP_TEST=1 \
 fi
 
 for setting in \
-  'User=ixcss-media' \
-  'Group=ixcss-media' \
+  'User=xszs' \
+  'Group=xszs' \
   'UMask=0077' \
   'StateDirectory=isarmg/xszs' \
   'RuntimeDirectory=isarmg/xszs' \

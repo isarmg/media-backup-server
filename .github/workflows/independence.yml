@@ -13,7 +13,7 @@ jobs:
       - run: ./scripts/check-workflow-supply-chain.sh
       - run: |
           set -euo pipefail
-          # Current Foundation SQLite metadata is not retired runtime coupling.
+          # Current xcss SQLite metadata is not retired runtime coupling.
           if git grep -n -I -P 'UNION_|X-Union-|PluginManifest|ProcessContext|xcss-platform|xcss_platform(?!_metadata\b)' -- . ':(exclude).github/workflows/independence.yml'; then
             exit 1
           else

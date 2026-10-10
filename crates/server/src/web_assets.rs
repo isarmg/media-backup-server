@@ -1,4 +1,4 @@
-//! The Foundation-generated inventory and bytes are part of this executable.
+//! The xcss-generated inventory and bytes are part of this executable.
 include!(concat!(env!("OUT_DIR"), "/xcss-web-assets.rs"));
 
 pub(crate) fn response(
@@ -6,5 +6,5 @@ pub(crate) fn response(
     method: &axum::http::Method,
     headers: &axum::http::HeaderMap,
 ) -> axum::response::Response {
-    xcss_web_assets::response(ASSETS, path, method, headers).map(axum::body::Body::from)
+    xcss::web_assets::response(ASSETS, path, method, headers).map(axum::body::Body::from)
 }

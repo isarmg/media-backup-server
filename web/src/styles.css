@@ -1,4 +1,4 @@
-/* Business layout only; Foundation owns fonts, themes and UI controls. */
+/* Business layout only; xcss owns fonts, themes and UI controls. */
 .media-business { min-width: 0; }
 .media-sections { grid-template-columns: minmax(0, 1fr); display: grid; gap: var(--xcss-content-spacing, 16px); }
 .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: 1rem; }

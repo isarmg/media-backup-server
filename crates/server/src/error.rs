@@ -4,7 +4,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::fmt;
-use xcss_error::{ErrorCode, ErrorEnvelope, HttpStatus as FoundationHttpStatus};
+use xcss::error::{ErrorCode, ErrorEnvelope, HttpStatus as XcssHttpStatus};
 
 #[derive(Debug)]
 pub struct AppError {
@@ -74,10 +74,7 @@ impl AppError {
         let message = message.into();
         Self {
             status: StatusCode::TOO_MANY_REQUESTS,
-            envelope: Box::new(ErrorEnvelope::new(
-                FoundationHttpStatus::TooManyRequests,
-                message,
-            )),
+            envelope: Box::new(ErrorEnvelope::new(XcssHttpStatus::TooManyRequests, message)),
             retry_after: Some(retry_after.max(1)),
         }
     }
@@ -103,15 +100,15 @@ impl IntoResponse for AppError {
 
 fn error_envelope(status: StatusCode, message: String) -> ErrorEnvelope {
     let foundation_status = match status {
-        StatusCode::BAD_REQUEST => Some(FoundationHttpStatus::BadRequest),
-        StatusCode::UNAUTHORIZED => Some(FoundationHttpStatus::Unauthorized),
-        StatusCode::FORBIDDEN => Some(FoundationHttpStatus::Forbidden),
-        StatusCode::NOT_FOUND => Some(FoundationHttpStatus::NotFound),
-        StatusCode::CONFLICT => Some(FoundationHttpStatus::Conflict),
-        StatusCode::UNPROCESSABLE_ENTITY => Some(FoundationHttpStatus::UnprocessableEntity),
-        StatusCode::TOO_MANY_REQUESTS => Some(FoundationHttpStatus::TooManyRequests),
-        StatusCode::INTERNAL_SERVER_ERROR => Some(FoundationHttpStatus::Internal),
-        StatusCode::SERVICE_UNAVAILABLE => Some(FoundationHttpStatus::ServiceUnavailable),
+        StatusCode::BAD_REQUEST => Some(XcssHttpStatus::BadRequest),
+        StatusCode::UNAUTHORIZED => Some(XcssHttpStatus::Unauthorized),
+        StatusCode::FORBIDDEN => Some(XcssHttpStatus::Forbidden),
+        StatusCode::NOT_FOUND => Some(XcssHttpStatus::NotFound),
+        StatusCode::CONFLICT => Some(XcssHttpStatus::Conflict),
+        StatusCode::UNPROCESSABLE_ENTITY => Some(XcssHttpStatus::UnprocessableEntity),
+        StatusCode::TOO_MANY_REQUESTS => Some(XcssHttpStatus::TooManyRequests),
+        StatusCode::INTERNAL_SERVER_ERROR => Some(XcssHttpStatus::Internal),
+        StatusCode::SERVICE_UNAVAILABLE => Some(XcssHttpStatus::ServiceUnavailable),
         _ => None,
     };
     if let Some(status) = foundation_status {
@@ -129,7 +126,7 @@ fn error_envelope(status: StatusCode, message: String) -> ErrorEnvelope {
         _ => ("request_failed", false),
     };
     ErrorEnvelope::with_code(
-        ErrorCode::new(code).expect("built-in Media Backup error code must be valid"),
+        ErrorCode::new(code).expect("built-in xszs error code must be valid"),
         message,
     )
     .retryable(retryable)

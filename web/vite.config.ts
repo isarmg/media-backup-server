@@ -1,14 +1,14 @@
-import { foundationFontLicenses } from "./font-licenses.mjs";
-import { createXcssReactViteConfig } from "@xcss/web-toolchain/vite";
+import { xcssFontLicenses } from "./font-licenses.mjs";
+import { createXcssReactViteConfig } from "@xcss/web/web-toolchain/vite";
 import { mergeConfig, type Plugin } from "vite";
 import { readFileSync } from "node:fs";
 
 export default mergeConfig(createXcssReactViteConfig({ base: "/admin/" }), {
-  plugins: [foundationFontLicenses(), {
+  plugins: [xcssFontLicenses(), {
     name: "media-font-license",
     generateBundle() {
-      this.emitFile({ type: "asset", fileName: "assets/MapleMono-OFL.txt", source: readFileSync(new URL(import.meta.resolve("@xcss/web-fonts/OFL.txt"))) });
-      this.emitFile({ type: "asset", fileName: "assets/CJK-LICENSE.txt", source: readFileSync(new URL(import.meta.resolve("@xcss/web-fonts/CJK-LICENSE.txt"))) });
+      this.emitFile({ type: "asset", fileName: "assets/MapleMono-OFL.txt", source: readFileSync(new URL(import.meta.resolve("@xcss/web/web-fonts/OFL.txt"))) });
+      this.emitFile({ type: "asset", fileName: "assets/CJK-LICENSE.txt", source: readFileSync(new URL(import.meta.resolve("@xcss/web/web-fonts/CJK-LICENSE.txt"))) });
     },
   } satisfies Plugin],
   build: {

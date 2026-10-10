@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{QueryBuilder, Row, Sqlite, SqliteConnection, SqlitePool};
 use std::collections::HashMap;
 use uuid::Uuid;
-use xcss_server_cli::{ContractJson, ContractPath, ContractQuery};
+use xcss::server_cli::{ContractJson, ContractPath, ContractQuery};
 use xszs_protocol::{
     API_BASE_PATH, AlbumRecord, AssetSummary, CreateTagRequest, DuplicateGroup, EmptyRequest,
     MediaKind, ResourceSummary, SetTagAssetsRequest, StorageEncoding, SyncAlbumRequest, SyncEvent,
