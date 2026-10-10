@@ -11,6 +11,8 @@ schema revision 1；软件版本、数据库版本和 Client 移动状态版本�
 | [图库 API](gallery-api.md) | 移动端与 Server 开发者 | 筛选、快照、增量、Range 与派生预览 |
 | [运维手册](operations.md) | 发布与值班人员 | 构建、安装、配置、诊断、备份缺口和发布门禁 |
 | [发行包手册](server-release-readme.md) | 部署人员 | 已构建归档的校验、安装、运行和退役 |
+| [服务命令](cli.md) | 部署与诊断人员 | 显式初始化、配置验证和就绪状态 |
+| [开发与验证](development.md) | 开发者 | 工具链、Rust 检查和发行部署验收 |
 | [账号设置](account-settings.md) | 管理员 | 当前管理员账号修改与会话失效语义 |
 
 历史行为只在 `releases/` 中说明；排查当前系统时不要把旧发行说明当作现行合同。Android/iOS 构建、

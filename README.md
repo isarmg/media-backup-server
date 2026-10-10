@@ -1,64 +1,58 @@
 # xszs
 
-当前工作树为 `1.0.0` 发行候选；正式源码、标签与资产以通过 CI 的精准 Source 和 Release manifest 为准。
+## 项目简要介绍
 
-当前启动入口和初始化边界见 [服务命令](docs/cli.md)。部署须先显式 `init`，再 `run`；配置验证和状态查询失败会返回非零退出码。
+自托管的照片与视频备份服务。Rust 服务端接收独立 xszc 移动客户端的数据，并提供内置管理页面。
 
-xszs `1.0.0` 是自托管的照片与视频备份服务。Rust/Axum 服务端负责移动设备配对、分块上传、媒体索引和文件交付，内置管理 Web 用于管理备份实例、账号和运行状态。
+## 项目功能
 
-正式 Server 仅支持 Linux AMD64 GNU（`x86_64-unknown-linux-gnu`）。Android/iOS 应用位于独立的 [xszc](https://github.com/isarmg/xszc) 仓库。
+- 移动设备配对、账号与备份实例管理
+- 分块上传、媒体索引、图库查询和文件交付
+- 运行状态、管理员账号与访问凭据管理
 
-设备侧从安装、配对/重新配对到服务或后台任务管理、诊断与卸载，见独立 [Client 分平台部署指南](https://github.com/isarmg/xszc/blob/main/docs/platform-setup.md)。
+## 适用平台
 
-## 配置概览
+服务端仅支持 Linux AMD64 GNU（`x86_64-unknown-linux-gnu`），需要 systemd、Python 3.11+、GNU 工具及 HTTPS 反向代理。Android/iOS 客户端由独立 xszc 项目提供。
 
-从模板创建生产环境文件，并生成独立的凭据加密密钥：
+## 如何快速部署
+
+从 [下载页](https://github.com/isarmg/xszs/releases) 下载 Linux 归档及同版 `SHA256SUMS`，在全新主机目录执行：
 
 ```sh
-sudo install -d -m 0750 /etc/isarmg
-sudo install -m 0600 config/xszs.env.example /etc/isarmg/xszs.env
-openssl rand -base64 32
+sha256sum --check SHA256SUMS
+tar -xzf xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz
+cd xszs-1.0.0-x86_64-unknown-linux-gnu
+./bin/xszs release-verify "$PWD"
+sudo ./scripts/setup-wsl.sh
 sudoedit /etc/isarmg/xszs.env
 ```
 
-至少设置数据库、数据目录、管理员密码、`XSZS_CREDENTIALS_KEY` 和 `METRICS_TOKEN`。默认模板监听 `127.0.0.1:8080`，生产环境应由 HTTPS 反向代理对外提供服务。
-
-构建并验证发行包：
+审阅管理员密码、`XSZS_CREDENTIALS_KEY` 与 `METRICS_TOKEN`，删除已确认的 `INITIAL-SECRETS-MUST-BE-REPLACED` 标记。默认监听 `127.0.0.1:8080`；配置 HTTPS 网关后显式初始化并启动：
 
 ```sh
+sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
+  -p EnvironmentFile=/etc/isarmg/xszs.env \
+  /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
+sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
+```
+
+安装器不覆盖已有发行目录或 systemd unit，普通启动不创建数据库。媒体按明文字节保存，主机需提供存储加密和最小权限。
+
+## 如何编译部署
+
+在 Linux AMD64 的干净源码目录准备 Rust 1.99.0、Node.js 26.7.0 与 C 编译工具：
+
+```sh
+rustup target add --toolchain 1.99.0 x86_64-unknown-linux-gnu
 revision="$(git rev-parse HEAD)"
 npm ci --prefix web
-npm run build --prefix web
-XSZS_SOURCE_REVISION="$revision" cargo build --release --locked -p xszs \
-  --target x86_64-unknown-linux-gnu
+web/node_modules/.bin/xcss-build-server --config "$PWD/xcss-web-build.json" \
+  --mode release --no-install --source-revision "$revision"
 mkdir -p "$PWD/dist"
 ./scripts/build-server-release.sh \
-  "$PWD/target/x86_64-unknown-linux-gnu/release/xszs" \
-  "$revision" "$PWD/dist"
-./scripts/test-deployment.sh \
-  "$PWD/dist/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz"
+  "$PWD/target/x86_64-unknown-linux-gnu/release/xszs" "$revision" "$PWD/dist"
 ```
 
-发行树安装、启动、账号维护、备份和恢复步骤见[运维文档](docs/operations.md)。
+输出 `dist/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz`，按上面的安装、配置和初始化步骤部署。
 
-## 开发验证
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
-```
-
-## 文档
-
-- [文档总览](docs/README.md)
-- [仓库与 Client/Server 边界](docs/repository-boundary.md)
-- [接口消费者边界](docs/interface-consumers.md)
-- [功能范围与取舍](docs/feature-inventory-and-tradeoffs.md)
-- [部署与运维](docs/operations.md)
-
-代码采用 [Apache License 2.0](LICENSE)。
-
-当前发布版本：**1.0.0**。参见 [1.0.0 发布说明](docs/releases/1.0.0.md)。
-
-公共支撑的职责、单体依赖、平台边界与验证方法见[公共支撑说明](docs/common-support.md)。
+[详细文档](docs/README.md)
