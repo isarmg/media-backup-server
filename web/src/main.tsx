@@ -77,7 +77,7 @@ function Application() {
 const Root = createXcssAdminApplication({ product: { name: "xszs" }, client: administratorApi,
   navigation: [], loginLandingHref: "#instances", routes: <Application /> });
 const root = document.getElementById("root");
-if (root === null) throw new Error("缺少 React 根节点");
+if (root === null) throw new Error("The React root element is missing");
 void startAfterFonts(() => {
   createRoot(root).render(<StrictMode><Root /></StrictMode>);
 });
