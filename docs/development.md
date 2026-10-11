@@ -69,8 +69,8 @@ HTTP 响应和发行身份校验。xcss 根据本次 dist 自动生成 inventory
 失败重试、内部数据归属与管理员账户入口隔离、无平台管理员面板、字体资产、键盘焦点及移动明暗主题 WCAG AA。首次运行先在
 `web` 执行 `npx playwright install --with-deps chromium firefox`。
 
-当前 Server Rust 固定 xcss `=1.0.0` / `b0524c4fb018b5ba4f27ad71bf32b74c8ef0a972`；一个 @xcss/web 包使用
-xcss 1.0.0 正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
+当前 Server Rust 固定 xcss `=1.0.2` / `3f751196615edd9f7fda2d76a5aa90f9f42586dc`；一个 @xcss/web 包使用
+xcss 1.0.2 正式 Release tarball 与 lockfile integrity，不依赖相邻工作区。本仓库 CI 验证 Server、Web 与发行
 归档；Android/iOS 构建和签名证据属于 Client 仓库，不能用 Server 构建结果代替。
 后续更新仍须复验锁图和发行身份；不得在线编辑 `share/web-assets.json`、复制旧 dist、vendoring 共享 CSS 或加入兼容 fallback。
 
