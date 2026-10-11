@@ -36,7 +36,7 @@ Android/iOS 只向 `/v1/auth/bootstrap` 提交服务器地址、实例授权码�
 
 ## 6. 当前数据库合同
 
-服务端软件版本是 `1.0.0`，但数据库合同独立保持不变：`product_metadata` 必须精确为
+服务端软件版本是 `1.0.1`，但数据库合同独立保持不变：`product_metadata` 必须精确为
 `application=xszs`、`application_version=1.0.0`、
 `schema_revision=1`，Schema SHA-256 为
 `0e37f8a3992b1904215d5f4c9ac428448752718506611f818482d890322d300d`。移动队列对应

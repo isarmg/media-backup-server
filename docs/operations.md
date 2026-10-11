@@ -16,7 +16,7 @@ curl --fail http://127.0.0.1:8080/readyz
 启动已配置部署时使用包内脚本，它会复核发行、unit 和配置：
 
 ```sh
-sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
+sudo /opt/isarmg/xszs/releases/1.0.1/scripts/start-server-wsl.sh
 ```
 
 停止使用 `sudo systemctl stop xszs.service`，确认进程退出后再执行维护。`run-server-wsl.sh` 会启动服务并跟随日志，Ctrl+C 仅结束查看。
@@ -37,7 +37,7 @@ sudo systemctl stop xszs.service
 sudo systemctl status xszs.service --no-pager
 sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
   -p EnvironmentFile=/etc/isarmg/xszs.env \
-  /opt/isarmg/xszs/releases/1.0.0/bin/xszs doctor
+  /opt/isarmg/xszs/releases/1.0.1/bin/xszs doctor
 ```
 
 停服后的 `systemctl status` 返回非零是正常现象，应看到 inactive 且无服务进程。Doctor 检查当前结构、SQLite、对象 Hash、上传状态与存储探针。
@@ -46,7 +46,7 @@ sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
 ```sh
 sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
   -p EnvironmentFile=/etc/isarmg/xszs.env \
-  /opt/isarmg/xszs/releases/1.0.0/bin/xszs reconcile scan
+  /opt/isarmg/xszs/releases/1.0.1/bin/xszs reconcile scan
 ```
 
 该命令会完成待处理上传、回收已记账的无引用 blob 并清理相应暂存项。完成后重新运行 Doctor，再用启动脚本恢复服务。

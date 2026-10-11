@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly release="/opt/isarmg/xszs/releases/1.0.0"
+readonly release="/opt/isarmg/xszs/releases/1.0.1"
 readonly binary="$release/bin/xszs"
 readonly config="/etc/isarmg/xszs.env"
 readonly unit="/etc/systemd/system/xszs.service"
@@ -31,7 +31,7 @@ verify_installed_release() {
   [[ "$output" != *$'\n'* ]] || fail "release verifier returned multiple lines"
   IFS=$'\t' read -r line_marker product version revision target fingerprint extra <<<"$output"
   [[ -z "${extra:-}" && "$line_marker" == "XSZS_RELEASE_VERIFIED_V1" &&
-    "$product" == "xszs" && "$version" == "1.0.0" &&
+    "$product" == "xszs" && "$version" == "1.0.1" &&
     "$revision" =~ ^[0-9a-f]{40}$ && "$target" == "x86_64-unknown-linux-gnu" &&
     "$fingerprint" == "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["identity"]["release_contract_sha256"])' "$release/release-manifest.json")" ]] || fail "installed release returned an unexpected identity"
   [[ -f "$unit" && ! -L "$unit" && "$(stat -c '%a:%u:%g:%h' -- "$unit")" == "644:0:0:1" ]] ||

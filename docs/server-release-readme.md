@@ -1,6 +1,6 @@
 # 安装 xszs 服务端
 
-本手册随 `xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz` 打包，使用包内程序和脚本完成全新安装。
+本手册随 `xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz` 打包，使用包内程序和脚本完成全新安装。
 目标是通过 HTTPS 登录管理页，并让 xszc 手机客户端完成一份测试媒体的上传和读取。
 
 ## 主机准备
@@ -17,16 +17,16 @@
 把归档与同版 `SHA256SUMS` 放在同一目录：
 
 ```sh
-grep ' xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
+grep ' xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz$' SHA256SUMS \
   | sha256sum --check -
-tar -tzf xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz
-cd xszs-1.0.0-x86_64-unknown-linux-gnu
+tar -tzf xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz
+cd xszs-1.0.1-x86_64-unknown-linux-gnu
 ./bin/xszs release-identity
 ./bin/xszs release-verify "$PWD"
 ```
 
-摘要应来自可信发布渠道。校验成功后，身份应包含 `product=xszs`、`version=1.0.0`、
+摘要应来自可信发布渠道。校验成功后，身份应包含 `product=xszs`、`version=1.0.1`、
 `target=x86_64-unknown-linux-gnu`、`api_version=v1`、`storage_encoding=plain-v1`、结构修订 1 和完整源码 SHA。
 完整校验输出以 `XSZS_RELEASE_VERIFIED_V1` 开头。校验失败时重新核对归档来源与完整性。
 
@@ -42,7 +42,7 @@ sudoedit /etc/isarmg/xszs.env
 安装器创建专用 `xszs` 用户、受保护的配置和状态目录，安装 unit 后暂不启动。预期布局：
 
 ```text
-/opt/isarmg/xszs/releases/1.0.0/   只读发行树
+/opt/isarmg/xszs/releases/1.0.1/   只读发行树
 /opt/isarmg/xszs/current          指向同版发行树的受控链接
 /etc/isarmg/xszs.env             root:root 0600
 /etc/systemd/system/xszs.service root:root 0644
@@ -100,8 +100,8 @@ media.example.com {
 ```sh
 sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
   -p EnvironmentFile=/etc/isarmg/xszs.env \
-  /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
-sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
+  /opt/isarmg/xszs/releases/1.0.1/bin/xszs init
+sudo /opt/isarmg/xszs/releases/1.0.1/scripts/start-server-wsl.sh
 ```
 
 `init` 只用于全新状态，普通运行不会创建数据库或重置管理员。已有状态使用 `config validate`。
@@ -112,7 +112,7 @@ sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
 ```sh
 curl --fail http://127.0.0.1:8080/healthz
 curl --fail http://127.0.0.1:8080/readyz
-/opt/isarmg/xszs/releases/1.0.0/scripts/verify-server-wsl.sh
+/opt/isarmg/xszs/releases/1.0.1/scripts/verify-server-wsl.sh
 ```
 
 本机检查应成功，验收脚本默认输出 `health=204 admin_page=200`。自定义监听时可为脚本设置 `XSZS_VERIFY_URL` 和 `XSZS_VERIFY_FORWARDED_PROTO`。
@@ -137,7 +137,7 @@ sudo systemctl stop xszs.service
 ```sh
 sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
   -p EnvironmentFile=/etc/isarmg/xszs.env \
-  /opt/isarmg/xszs/releases/1.0.0/bin/xszs doctor
+  /opt/isarmg/xszs/releases/1.0.1/bin/xszs doctor
 ```
 
 Doctor 检查当前结构、数据库完整性、对象 Hash、上传恢复及存储。若诊断确认有待处理提交或回收对象，使用相同前缀把最后的 `doctor` 换为 `reconcile scan`；它会推进已记录的提交和物理回收。完成后重新检查并启动。

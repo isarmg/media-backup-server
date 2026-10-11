@@ -6,7 +6,7 @@ readonly project_dir
 readonly binary="${1:-}"
 readonly source_revision="${2:-}"
 readonly output_arg="${3:-}"
-readonly version="1.0.0"
+readonly version="1.0.1"
 readonly target="x86_64-unknown-linux-gnu"
 readonly package="xszs-$version-$target"
 

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly product="xszs"
-readonly version="1.0.0"
+readonly version="1.0.1"
 readonly target="x86_64-unknown-linux-gnu"
 readonly service_user="xszs"
 readonly service_group="xszs"
@@ -155,7 +155,7 @@ expected_identity_keys = {
 }
 expected_identity = {
     "product": "xszs",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "target": "x86_64-unknown-linux-gnu",
     "api_version": "v1",
     "storage_encoding": "plain-v1",
@@ -382,7 +382,7 @@ preflight_config_path="$(rooted "$config_file")"
 preflight_unit_path="$(rooted "$unit_file")"
 validate_empty_release_destination
 if [[ -e "$preflight_release_path" || -L "$preflight_release_path" ]]; then
-  die "release 1.0.0 destination already exists; installation is one-shot and no-clobber"
+  die "release 1.0.1 destination already exists; installation is one-shot and no-clobber"
 fi
 if [[ -e "$preflight_config_path" || -L "$preflight_config_path" ]]; then
   ensure_single_link_regular_file "$preflight_config_path" "configuration"
@@ -415,7 +415,7 @@ if [[ "$test_mode" == "0" ]]; then
 fi
 
 [[ ! -e "$release_path" && ! -L "$release_path" ]] ||
-  die "release 1.0.0 destination appeared during installation"
+  die "release 1.0.1 destination appeared during installation"
 if [[ -e "$config_path" || -L "$config_path" ]]; then
   ensure_single_link_regular_file "$config_path" "configuration"
 fi
@@ -540,6 +540,6 @@ else
 fi
 printf 'Before first start, use sudoedit %s to securely record or replace all three generated secrets and remove %s.\n' \
   "$config_file" "$initial_secret_marker"
-printf 'After saving configuration, run systemd-run --wait --collect -p User=xszs -p Group=xszs -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.0/bin/xszs init before starting the service.\n'
+printf 'After saving configuration, run systemd-run --wait --collect -p User=xszs -p Group=xszs -p EnvironmentFile=/etc/isarmg/xszs.env /opt/isarmg/xszs/releases/1.0.1/bin/xszs init before starting the service.\n'
 printf 'Installed xszs %s from source revision %s; the service was not started.\n' \
   "$version" "$source_revision"

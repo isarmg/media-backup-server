@@ -20,8 +20,8 @@
 
 ```sh
 sha256sum --check SHA256SUMS
-tar -xzf xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz
-cd xszs-1.0.0-x86_64-unknown-linux-gnu
+tar -xzf xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz
+cd xszs-1.0.1-x86_64-unknown-linux-gnu
 ./bin/xszs release-verify "$PWD"
 sudo ./scripts/setup-wsl.sh
 sudoedit /etc/isarmg/xszs.env
@@ -32,8 +32,8 @@ sudoedit /etc/isarmg/xszs.env
 ```sh
 sudo systemd-run --wait --collect -p User=xszs -p Group=xszs \
   -p EnvironmentFile=/etc/isarmg/xszs.env \
-  /opt/isarmg/xszs/releases/1.0.0/bin/xszs init
-sudo /opt/isarmg/xszs/releases/1.0.0/scripts/start-server-wsl.sh
+  /opt/isarmg/xszs/releases/1.0.1/bin/xszs init
+sudo /opt/isarmg/xszs/releases/1.0.1/scripts/start-server-wsl.sh
 ```
 
 安装器不覆盖已有发行目录或 systemd unit，普通启动不创建数据库。媒体按明文字节保存，主机需提供存储加密和最小权限。
@@ -53,6 +53,6 @@ mkdir -p "$PWD/dist"
   "$PWD/target/x86_64-unknown-linux-gnu/release/xszs" "$revision" "$PWD/dist"
 ```
 
-输出 `dist/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz`，按上面的安装、配置和初始化步骤部署。
+输出 `dist/xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz`，按上面的安装、配置和初始化步骤部署。
 
 [详细文档](docs/README.md)

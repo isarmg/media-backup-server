@@ -14,7 +14,7 @@ cargo test --workspace --locked
 构建归档后执行部署验收：
 
 ```sh
-./scripts/test-deployment.sh "$PWD/dist/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz"
+./scripts/test-deployment.sh "$PWD/dist/xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz"
 ```
 
 核心命令、显式初始化、只读验证与非零失败语义见[服务命令](cli.md)。移动端安装、配对、
@@ -24,7 +24,7 @@ cargo test --workspace --locked
 
 ## 构建发行归档
 
-维护者从干净的 `1.0.0` checkout 构建：
+维护者从干净的 `1.0.1` checkout 构建：
 
 ```bash
 revision="$(git rev-parse HEAD)"
@@ -35,7 +35,7 @@ mkdir -p "$PWD/dist"
 ./scripts/build-server-release.sh \
   "$PWD/target/x86_64-unknown-linux-gnu/release/xszs" \
   "$revision" "$PWD/dist"
-./scripts/test-deployment.sh "$PWD/dist/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz"
+./scripts/test-deployment.sh "$PWD/dist/xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz"
 ```
 
 `web/dist` 是 Rust 编译输入，不是可复用的维护者缓存；从干净 checkout 构建时必须先用锁文件生成。完成只

@@ -1,6 +1,7 @@
 [package]
 name = "xszs-protocol"
-version.workspace = true
+# Protocol identity is independent of the product release.
+version = "1.0.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true

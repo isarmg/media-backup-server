@@ -2,8 +2,8 @@
 set -euo pipefail
 
 readonly archive_arg="${1:-${XSZS_RELEASE_ARCHIVE:-}}"
-readonly package="xszs-1.0.0-x86_64-unknown-linux-gnu"
-readonly version="1.0.0"
+readonly package="xszs-1.0.1-x86_64-unknown-linux-gnu"
+readonly version="1.0.1"
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 readonly project_dir
 
@@ -28,7 +28,7 @@ cleanup() {
 trap cleanup EXIT
 
 [[ -n "$archive_arg" ]] ||
-  fail "usage: test-deployment.sh /absolute/path/xszs-1.0.0-x86_64-unknown-linux-gnu.tar.gz"
+  fail "usage: test-deployment.sh /absolute/path/xszs-1.0.1-x86_64-unknown-linux-gnu.tar.gz"
 [[ "$archive_arg" = /* && -f "$archive_arg" && ! -L "$archive_arg" ]] ||
   fail "release archive must be an absolute regular non-symlink file"
 [[ "$(stat -c '%h' -- "$archive_arg")" == "1" ]] || fail "release archive has a hard-link alias"
@@ -73,7 +73,7 @@ expected_keys = {
 }
 assert isinstance(identity, dict) and set(identity) == expected_keys
 assert identity["product"] == "xszs"
-assert identity["version"] == "1.0.0"
+assert identity["version"] == "1.0.1"
 assert re.fullmatch(r"[0-9a-f]{40}", identity["source_revision"])
 assert identity["target"] == "x86_64-unknown-linux-gnu"
 assert identity["api_version"] == "v1"
